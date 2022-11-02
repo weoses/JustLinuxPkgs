@@ -1,5 +1,8 @@
 package jaxb;
 
+import jaxb.attributeAdapters.DirectiveAdapter;
+import jaxb.attributeAdapters.ModeParserAdapter;
+import jaxb.attributeAdapters.PathUnixAdapter;
 import org.redline_rpm.payload.Directive;
 
 import javax.xml.bind.annotation.XmlElement;
@@ -25,7 +28,5 @@ public class XFile {
 
     @XmlTransient
     public boolean processed = false;
-
-
 }
 

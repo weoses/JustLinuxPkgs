@@ -2,7 +2,6 @@ import jaxb.XConfig;
 import jaxb.XFile;
 import org.apache.commons.io.FilenameUtils;
 import org.redline_rpm.Builder;
-import org.redline_rpm.header.FileDigestsAlg;
 import org.redline_rpm.payload.Directive;
 
 import java.io.File;
@@ -31,12 +30,17 @@ public class BuilderWrapper {
     private final Builder builder;
     private final XConfig confObject;
 
+    /**
+     * Рrocess specified in config files and directories
+     * @param inputDirecory root directory on disk
+     * @throws IOException
+     * @throws NoSuchAlgorithmException
+     */
     private void walkFiles(String inputDirecory) throws IOException, NoSuchAlgorithmException {
         for (XFile fileDefenition : confObject.packageFileDescription) {
             File fileOnDisk = Paths.get(inputDirecory, fileDefenition.pathInRpm).toFile();
             if (!fileOnDisk.exists()) {
-                logger.warn(
-                        String.format("Not found file on disk for %s, searching path was %s",
+                logger.warn(String.format("Not found file on disk for %s, searching path was %s",
                                 fileDefenition.pathInRpm,
                                 fileOnDisk.getAbsolutePath()));
                 continue;
@@ -47,12 +51,18 @@ public class BuilderWrapper {
                 processFile(fileOnDisk, fileDefenition);
             } else {
                 logger.info(String.format("Process directory %s", fileOnDisk));
-                processDirectory(inputDirecory, fileOnDisk, fileDefenition);
+                processDirectory(fileOnDisk, fileDefenition);
             }
 
         }
     }
 
+    /**
+     * Get XFile descriptor for RPM path, or make default from directory descriptor
+     * @param pathInRpm RPM path
+     * @param directoryDefinition Directory - template descriptor for file
+     * @return XFile
+     */
     private XFile getXfileForPath(String pathInRpm, XFile directoryDefinition) {
         XFile result = null;
         for (XFile fileInConfig : confObject.packageFileDescription) {
@@ -78,7 +88,14 @@ public class BuilderWrapper {
         return result;
     }
 
-    private void processDirectory(String inputDirectory, File fileOnDisk, XFile directoryDefinition) throws NoSuchAlgorithmException, IOException {
+    /**
+     * Add directory into rpm
+     * @param fileOnDisk Physical directory adress
+     * @param directoryDefinition Directory descriptor
+     * @throws NoSuchAlgorithmException
+     * @throws IOException
+     */
+    private void processDirectory(File fileOnDisk, XFile directoryDefinition) throws NoSuchAlgorithmException, IOException {
         logger.debug(String.format("Process directory rpm рath  - %s", directoryDefinition.pathInRpm));
         logger.debug(String.format("Process directory disk рath - %s", fileOnDisk.getAbsolutePath()));
 
@@ -94,38 +111,42 @@ public class BuilderWrapper {
 
         boolean addChildren =  true;
         if (directoryDefinition.addChildren != null) addChildren = directoryDefinition.addChildren == 1;
-        if (!addChildren) {
-            // add Only this directory.
-            int mode = DEFAULT_MODE;
-            Directive directive = Directive.NONE;
-            String owner = DEFAULT_OWNER;
-            String group = DEFAULT_GROUP;
-            boolean addParents = true;
 
-            if (directoryDefinition.dirmode != null) mode = directoryDefinition.dirmode;
-            if (directoryDefinition.directive != null) directive = directoryDefinition.directive;
-            if (directoryDefinition.owner != null) owner = directoryDefinition.owner;
-            if (directoryDefinition.group != null) group = directoryDefinition.group;
-            if (directoryDefinition.addParents != null) addParents = directoryDefinition.addParents == 1;
+        int dirmode = DEFAULT_MODE;
+        Directive directive = Directive.NONE;
+        String owner = DEFAULT_OWNER;
+        String group = DEFAULT_GROUP;
+        boolean addParents = true;
 
-            builder.addDirectory(directoryDefinition.pathInRpm, mode, directive, owner, group, addParents);
-        } else {
+        if (directoryDefinition.dirmode != null) dirmode = directoryDefinition.dirmode;
+        if (directoryDefinition.directive != null) directive = directoryDefinition.directive;
+        if (directoryDefinition.owner != null) owner = directoryDefinition.owner;
+        if (directoryDefinition.group != null) group = directoryDefinition.group;
+        if (directoryDefinition.addParents != null) addParents = directoryDefinition.addParents == 1;
+
+        builder.addDirectory(directoryDefinition.pathInRpm, dirmode, directive, owner, group, addParents);
+
+        if (addChildren) {
             // add all children in this directory
             List<Path> directories = Files.list(fileOnDisk.toPath()).collect(Collectors.toList());
             for (Path p : directories) {
+                // create RPM path for child file/directory
+                String strRpmPath = "/" + FilenameUtils.separatorsToUnix(Paths.get(
+                                directoryDefinition.pathInRpm,
+                                p.getName(p.getNameCount()-1).toString()
+                        ).toString());
 
-                String strRpmPath = "/" + FilenameUtils.separatorsToUnix(Paths.get(inputDirectory).relativize(p).toString());
                 if (!strRpmPath.startsWith("/")) strRpmPath = "/" + strRpmPath;
 
                 logger.debug(String.format("Constructed rpm path for %s - %s",
                         fileOnDisk.getPath(),
                         strRpmPath));
-
+                // get XFile descriptor for this path, if exists
                 XFile configEntry = getXfileForPath(strRpmPath, directoryDefinition);
                 if (p.toFile().isFile()) {
                     processFile(p.toFile(), configEntry);
                 } else {
-                    processDirectory(inputDirectory, p.toFile(), configEntry);
+                    processDirectory(p.toFile(), configEntry);
                 }
             }
         }
@@ -133,6 +154,11 @@ public class BuilderWrapper {
         directoryDefinition.processed = true;
     }
 
+    /**
+     * Add file into RPM
+     * @param fileOnDisk - path on physical file
+     * @param fileDefinition - path to file in RPM
+     */
     private void processFile(File fileOnDisk, XFile fileDefinition) throws NoSuchAlgorithmException, IOException {
         logger.debug( String.format("Process file rpm рath  - %s", fileDefinition.pathInRpm ));
         logger.debug( String.format("Process file disk рath - %s", fileOnDisk.getAbsolutePath()));
@@ -183,6 +209,10 @@ public class BuilderWrapper {
 
         fileDefinition.processed = true;
     }
+
+    /**
+     * Process buildins directories
+     */
     private void loadBuildins(){
         for (String buildin: confObject.buildInDir) {
             logger.info(String.format("Buildin directory  - %s", buildin));
