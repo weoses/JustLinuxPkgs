@@ -1,5 +1,5 @@
-<?xml version="1.0" encoding="UTF-8"?>
 <config>
+  <pkgParams>
     <packageName>Hello-World</packageName>
     <packageVersion>10</packageVersion>
     <packageRelease>1</packageRelease>
@@ -8,19 +8,33 @@
     <packageDescription>it is hello world package!</packageDescription>
     <packageArch>NOARCH</packageArch>
     <fileDigestsAlg>MD5</fileDigestsAlg>
+    <defaultDirmode>0755</defaultDirmode>
+    <defaultMode>744</defaultMode>
+  </pkgParams>
 
-    <filesDescription>
-        <packageFileDescription>
-            <pathInRpm>/opt/hello/bin/hello.sh</pathInRpm>
-            <mode>0755</mode>
-        </packageFileDescription>
-        <packageFileDescription>
-            <pathInRpm>/opt/hello/lib/hello.txt</pathInRpm>
-            <mode>0755</mode>
-        </packageFileDescription>
-        <packageFileDescription>
-            <pathInRpm>/opt/hello/lib/hello_libs</pathInRpm>
-            <mode>0755</mode>
-        </packageFileDescription>
-    </filesDescription>
+  <buildInDirs>
+    <!--Zero or more repetitions:-->
+    <buildInDir>/opt/hello</buildInDir>
+  </buildInDirs>
+
+  <files>
+    <!--Zero or more repetitions:-->
+    <file>
+      <pkgPath>/opt/hello/bin</pkgPath>
+      <addParents>1</addParents>
+      <recursive>0</recursive>
+      <mode>0555</mode>
+      <dirmode>0555</dirmode>
+    </file>
+    <file>
+      <pkgPath>/opt/hello/bin/binaries</pkgPath>
+      <addParents>0</addParents>
+      <mode>700</mode>
+      <dirmode>700</dirmode>
+    </file>
+    <file>
+      <pkgPath>/opt/hello/bin/binaries/1.txt</pkgPath>
+      <addParents>1</addParents>
+    </file>
+  </files>
 </config>

@@ -1,3 +1,4 @@
+import builders.BuildType;
 import net.sourceforge.argparse4j.ArgumentParsers;
 import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.ArgumentParserException;
@@ -43,8 +44,8 @@ public class Main {
             System.out.printf("Out - %s%n", out);
             System.out.printf("In - %s%n", in);
 
-            Config conf = new Config(configFile);
-            createAndRunBuilder(conf, in, out);
+            Config conf = new Config(configFile, BuildType.RPM, in, out);
+            createAndRunBuilder(conf);
 
         } catch (ArgumentParserException e) {
             parser.handleError(e);
@@ -60,9 +61,8 @@ public class Main {
         }
     }
 
-    private static void createAndRunBuilder(Config config, String input, String outputDirectory) throws IOException, NoSuchAlgorithmException {
-        BuilderWrapper wrapper = new BuilderWrapper(config);
-        wrapper.loadFiles(input);
-        wrapper.build(outputDirectory);
+    private static void createAndRunBuilder(Config config) throws IOException, NoSuchAlgorithmException {
+        BuilderWrapper wrapper = BuilderWrapper.createBuilderWrapper(config);
+        wrapper.build(config.getOutput());
     }
 }

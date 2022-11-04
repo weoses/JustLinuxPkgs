@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<xs:schema version="1.0" xmlns:xs="http://www.w3.org/2001/XMLSchema">
+
+  <xs:element name="config" type="xConfig"/>
+
+  <xs:complexType name="xConfig">
+    <xs:sequence>
+      <xs:element name="pkgParams" type="xPkgParams"/>
+      <xs:element name="defaults" type="xDefaults" minOccurs="0"/>
+      <xs:element name="buildInDirs" minOccurs="0">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="buildInDir" type="xs:string" nillable="true" minOccurs="0" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="files" minOccurs="0">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="file" type="xFile" nillable="true" minOccurs="0" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="xPkgParams">
+    <xs:sequence>
+      <xs:element name="packageName" type="attribute" minOccurs="0"/>
+      <xs:element name="packageVersion" type="attribute" minOccurs="0"/>
+      <xs:element name="packageEpoch" type="xs:int" default="1"/>
+      <xs:element name="packageRelease" type="attribute" default="1" minOccurs="0"/>
+      <xs:element name="packageLicense" type="attribute" default="HIDDEN" minOccurs="0"/>
+      <xs:element name="packageDescription" type="attribute" minOccurs="0"/>
+      <xs:element name="packageArch" type="architecture" minOccurs="0"/>
+      <xs:element name="fileDigestsAlg" type="fileDigestsAlg" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="attribute">
+    <xs:simpleContent>
+      <xs:extension base="xs:string">
+        <xs:attribute name="fromFile" type="xs:string"/>
+      </xs:extension>
+    </xs:simpleContent>
+  </xs:complexType>
+
+  <xs:complexType name="xDefaults">
+    <xs:sequence>
+      <xs:element name="defaultDirmode" type="xs:string" minOccurs="0"/>
+      <xs:element name="defaultMode" type="xs:string" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="xFile">
+    <xs:sequence>
+      <xs:element name="pkgPath" type="xs:string"/>
+      <xs:element name="mode" type="xs:string" minOccurs="0"/>
+      <xs:element name="dirmode" type="xs:string" minOccurs="0"/>
+      <xs:element name="owner" type="xs:string" minOccurs="0"/>
+      <xs:element name="group" type="xs:string" minOccurs="0"/>
+      <xs:element name="recursive" type="xs:boolean" minOccurs="0"/>
+      <xs:element name="addParents" type="xs:boolean" minOccurs="0"/>
+      <xs:element name="directive" type="xs:string" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:simpleType name="architecture">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="NOARCH"/>
+      <xs:enumeration value="I386"/>
+      <xs:enumeration value="ALPHA"/>
+      <xs:enumeration value="SPARC"/>
+      <xs:enumeration value="MIPS"/>
+      <xs:enumeration value="PPC"/>
+      <xs:enumeration value="M68K"/>
+      <xs:enumeration value="IP"/>
+      <xs:enumeration value="RS6000"/>
+      <xs:enumeration value="IA64"/>
+      <xs:enumeration value="SPARC64"/>
+      <xs:enumeration value="MIPSEL"/>
+      <xs:enumeration value="ARM"/>
+      <xs:enumeration value="MK68KMINT"/>
+      <xs:enumeration value="S390"/>
+      <xs:enumeration value="S390X"/>
+      <xs:enumeration value="PPC64"/>
+      <xs:enumeration value="SH"/>
+      <xs:enumeration value="XTENSA"/>
+      <xs:enumeration value="X86_64"/>
+      <xs:enumeration value="PPC64LE"/>
+      <xs:enumeration value="AARCH64"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="fileDigestsAlg">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="MD5"/>
+      <xs:enumeration value="SHA1"/>
+      <xs:enumeration value="SHA256"/>
+      <xs:enumeration value="SHA384"/>
+      <xs:enumeration value="SHA512"/>
+    </xs:restriction>
+  </xs:simpleType>
+</xs:schema>
+

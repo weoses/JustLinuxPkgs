@@ -1,253 +1,395 @@
-import jaxb.XConfig;
+import builders.PkgBuilder;
+
+import jaxb.XDefaults;
 import jaxb.XFile;
-import org.apache.commons.io.FilenameUtils;
-import org.redline_rpm.Builder;
-import org.redline_rpm.payload.Directive;
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.security.NoSuchAlgorithmException;
-import java.util.List;
+import java.util.*;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
+import org.apache.commons.io.FilenameUtils;
+import org.redline_rpm.payload.Directive;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import java.util.stream.Collectors;
-
-import static java.util.logging.Logger.getLogger;
-import static org.redline_rpm.header.Os.LINUX;
-import static org.redline_rpm.header.RpmType.BINARY;
 
 public class BuilderWrapper {
+
     private final Logger logger = LoggerFactory.getLogger(BuilderWrapper.class.getName());
 
+    private Directive DEFAULT_DIRECTIVE = Directive.NONE;
     private int DEFAULT_MODE = 0644;
     private int DEFAULT_DIRMODE = 0755;
-    private final String DEFAULT_OWNER = "root";
-    private final String DEFAULT_GROUP = "root";
+    private String DEFAULT_OWNER = "root";
+    private String DEFAULT_GROUP = "root";
 
-    private final Builder builder;
-    private final XConfig confObject;
+    private final PkgBuilder builder;
 
-    /**
-     * Рrocess specified in config files and directories
-     * @param inputDirecory root directory on disk
-     * @throws IOException
-     * @throws NoSuchAlgorithmException
-     */
-    private void walkFiles(String inputDirecory) throws IOException, NoSuchAlgorithmException {
-        for (XFile fileDefenition : confObject.packageFileDescription) {
-            File fileOnDisk = Paths.get(inputDirecory, fileDefenition.pathInRpm).toFile();
-            if (!fileOnDisk.exists()) {
-                logger.warn(String.format("Not found file on disk for %s, searching path was %s",
-                                fileDefenition.pathInRpm,
-                                fileOnDisk.getAbsolutePath()));
+    private FileTreeNode root;
+
+    private BuilderWrapper(PkgBuilder builder){
+        this.builder = builder;
+    }
+    public static BuilderWrapper createBuilderWrapper (Config config) {
+
+        PkgBuilder builder = PkgBuilder.getBuilder(
+                config.getType(),
+                config.getxConfig().pkgParams);
+
+        BuilderWrapper wrapper = new BuilderWrapper(builder);
+        wrapper.loadBuildIns(config.getxConfig().buildInDir);
+        wrapper.loadDefaults(config.getxConfig().defaults);
+        wrapper.loadFiles(config.getInput(), config.getxConfig().file);
+        return  wrapper;
+    }
+    public void loadBuildIns(List<String> buildIns){
+        if (buildIns == null) return;
+        for (String buildin: buildIns) {
+            logger.info(String.format("Buildin directory  - %s", buildin));
+            builder.addBuildin(buildin);
+        }
+    }
+    public void loadDefaults(XDefaults defaults){
+        if (defaults == null) return;
+
+        if (defaults.defaultDirmode != null)
+            DEFAULT_DIRMODE = defaults.defaultDirmode;
+        if (defaults.defaultMode != null)
+            DEFAULT_MODE = defaults.defaultMode;
+    }
+    public void loadFiles(String input, List<XFile> xFiles) {
+        root = new FileTreeNode(
+                "",
+                new File(input),
+                -1,
+                null,
+                Directive.NONE,
+                DEFAULT_OWNER,
+                DEFAULT_GROUP,
+                false,
+                true);
+
+        for (XFile fileDefinition : xFiles) {
+            File physical = pkgPathToFile(fileDefinition.pkgPath, input);
+            if (!physical.exists()){
+                logger.warn(String.format("File %s not exist on disk, search path - %s", fileDefinition.pkgPath, physical));
                 continue;
             }
 
-            if (fileOnDisk.isFile()) {
-                logger.info(String.format("Process file %s", fileOnDisk));
-                processFile(fileOnDisk, fileDefenition);
+            setXFileDefaults(fileDefinition);
+            processXFile(fileDefinition, physical);
+        }
+    }
+
+    private File pkgPathToFile(String pkgPath, String root){
+        return Paths.get(root, FilenameUtils.separatorsToSystem(pkgPath)).toFile();
+    }
+
+    public FileTreeNode addParentsForPath(Path path,
+                                          int dirmode,
+                                          Directive directive,
+                                          String owner,
+                                          String group,
+                                          boolean isDummy) {
+        FileTreeNode finder = root;
+        Path pkgPath = null;
+        Stack<FileTreeNode> nodesPath = new Stack<>();
+
+        for (int i = 0; i < path.getNameCount()-1;  i++){
+            Path nextNode = path.getName(i);
+            String nodeName = nextNode.toString();
+
+            // Find pkg path
+            if(pkgPath != null){
+                pkgPath = pkgPath.resolve(nextNode);
             } else {
-                logger.info(String.format("Process directory %s", fileOnDisk));
-                processDirectory(fileOnDisk, fileDefenition);
+                pkgPath = nextNode;
+            }
+            String strPkgPath = pkgPath.toString();
+            File physical = pkgPathToFile(strPkgPath, root.physical.toString());
+            if (!physical.exists()){
+                logger.warn(String.format("Cant create parent elements for path %s, directory %s not exist. Physical path - %s", path, strPkgPath, physical));
+                return null;
             }
 
+            // Get or create next node
+            FileTreeNode current = finder.getChild(nodeName);
+            if (current == null) {
+                logger.info(String.format("Add parent %s, physical - %s", finder.getPath().resolve(nodeName),  physical));
+                current = new FileTreeNode(
+                        nodeName,
+                        physical,
+                        dirmode,
+                        finder,
+                        directive,
+                        owner,
+                        group,
+                        false,
+                        isDummy);
+                finder.addChild(current);
+            } else {
+                nodesPath.add(current);
+            }
+
+            finder = current;
         }
+
+        if (!isDummy) {
+            // going back from farest element in path and setting new directory rights until the manually-configured directory found
+            while (nodesPath.size() > 0) {
+                FileTreeNode current = nodesPath.pop();
+                if (current.isManuallyConfigured) {
+                    break;
+                }
+                logger.info(String.format("Edit parent %s, physical - %s", current, current.physical));
+                current.rights = dirmode;
+                current.owner = owner;
+                current.group = group;
+                current.directive = directive;
+                current.isDummy = isDummy;
+            }
+        }
+        return finder;
     }
 
-    /**
-     * Get XFile descriptor for RPM path, or make default from directory descriptor
-     * @param pathInRpm RPM path
-     * @param directoryDefinition Directory - template descriptor for file
-     * @return XFile
-     */
-    private XFile getXfileForPath(String pathInRpm, XFile directoryDefinition) {
-        XFile result = null;
-        for (XFile fileInConfig : confObject.packageFileDescription) {
-            if (fileInConfig.pathInRpm.equalsIgnoreCase(pathInRpm)) {
-                result = fileInConfig;
-                break;
-            }
-        }
+    public void processXFile(XFile file, File physical) {
+        Path pkgFilePathObj = Paths.get(file.pkgPath);
+        String filename = pkgFilePathObj.getFileName().toString();
+        // add all parents
+        FileTreeNode lastParentDirectory = addParentsForPath(
+                pkgFilePathObj,
+                file.dirmode,
+                file.directive,
+                file.owner,
+                file.group,
+                !file.addParents);
 
-        if (result == null) {
-            logger.debug(String.format("Config definition for %s not found, using inherited", pathInRpm));
-            result = new XFile();
-            result.pathInRpm = pathInRpm;
-            result.group = directoryDefinition.group;
-            result.owner = directoryDefinition.owner;
-            result.directive = directoryDefinition.directive;
-            result.dirmode = directoryDefinition.dirmode;
-            result.mode = directoryDefinition.mode;
-            result.addParents = directoryDefinition.addParents;
+        if (lastParentDirectory == null) {
+            logger.warn(String.format("Cant create file %s - parent directory not exist!", file.pkgPath));
+            return;
+        }
+        // add file/directory
+        FileTreeNode current = lastParentDirectory.getChild(filename);
+        if (current == null) {
+            logger.info(String.format("Add %s, physical - %s", lastParentDirectory.getPath().resolve(filename),  physical));
+            current = lastParentDirectory.addChild(new FileTreeNode(
+                    filename,
+                    physical,
+                    physical.isFile() ? file.mode : file.dirmode,
+                    null,
+                    file.directive,
+                    file.owner,
+                    file.group,
+                    true,
+                    false));
         } else {
-            logger.debug(String.format("Config definition for %s found", pathInRpm));
+            if (!current.isManuallyConfigured){
+                logger.info(String.format("Edit %s, physical - %s", current, physical));
+                current.owner = file.owner;
+                current.group = file.group;
+                current.rights = physical.isFile() ? file.mode : file.dirmode;
+                current.directive = file.directive;
+                current.isManuallyConfigured = true;
+            }
         }
-        return result;
+
+        // add children, if children haven't already added
+        if (physical.isDirectory() && file.recursive && !current.isAddChildrenUsed) {
+            current.isAddChildrenUsed = true;
+            addChildrenForPath(current, file.mode, file.dirmode, file.directive, file.owner, file.group);
+        }
+
     }
 
-    /**
-     * Add directory into rpm
-     * @param fileOnDisk Physical directory adress
-     * @param directoryDefinition Directory descriptor
-     * @throws NoSuchAlgorithmException
-     * @throws IOException
-     */
-    private void processDirectory(File fileOnDisk, XFile directoryDefinition) throws NoSuchAlgorithmException, IOException {
-        logger.debug(String.format("Process directory rpm рath  - %s", directoryDefinition.pathInRpm));
-        logger.debug(String.format("Process directory disk рath - %s", fileOnDisk.getAbsolutePath()));
+    private void setXFileDefaults(XFile obj){
+        if (obj.mode == null) obj.mode = DEFAULT_MODE;
+        if (obj.dirmode == null) obj.dirmode = DEFAULT_DIRMODE;
+        if (obj.directive == null) obj.directive = DEFAULT_DIRECTIVE;
+        if (obj.owner == null) obj.owner = DEFAULT_OWNER;
+        if (obj.group == null) obj.group = DEFAULT_GROUP;
+        if (obj.recursive == null) obj.recursive = true;
+        if (obj.addParents == null) obj.addParents = false;
+    }
 
-        if (!fileOnDisk.exists()) {
-            logger.warn(String.format("Directory %s not exist! May be a symlink or other non-windows stuff?", fileOnDisk.getPath()));
-            return;
+    private void addChildrenForPath(FileTreeNode startFrom,
+                                    int mode,
+                                    int dirmode,
+                                    Directive directive,
+                                    String owner,
+                                    String group) {
+        Path path = startFrom.getPath();
+        File physical = pkgPathToFile(path.toString(), root.physical.toString());
+        if (physical.isFile()) return;
+        Set<FileTreeNode> directories = new HashSet<>();
+
+        //get all files in directory
+        try (Stream<Path> paths = Files.list(physical.toPath()).sorted(Comparator.comparingInt(Path::getNameCount))) {
+            List<Path> pathList = paths.collect(Collectors.toList());
+            for (Path e : pathList) {
+                File file = e.toFile();
+                String name = file.getName();
+                BasicFileAttributes basicFileAttributes = Files.readAttributes(file.toPath(), BasicFileAttributes.class);
+
+                FileTreeNode newNode = startFrom.getChild(name);
+                //add a file/directory
+                if (newNode == null) {
+                    logger.info(String.format("Add %s, physical - %s", startFrom.getPath().resolve(name), file.getPath()));
+                    newNode = startFrom.addChild(new FileTreeNode(
+                            name,
+                            file,
+                            basicFileAttributes.isRegularFile() ? mode : dirmode,
+                            null,
+                            directive,
+                            owner,
+                            group,
+                            false,
+                            false));
+                } else if (!newNode.isManuallyConfigured) {
+                    logger.info(String.format("Edit %s, physical - %s", newNode, file));
+                    newNode.owner = owner;
+                    newNode.group = group;
+                    newNode.rights = physical.isFile() ? mode : dirmode;
+                    newNode.directive = directive;
+                }
+
+                // schedule adding children of this directory, if they haven't added already
+                if (basicFileAttributes.isDirectory() && !newNode.isAddChildrenUsed)
+                    directories.add(newNode);
+            }
+
+        } catch (IOException e) {
+            logger.warn(String.format("Cant add children for directory %s, physical - %s, %s ", path, physical, e.getMessage()));
         }
 
-        if (directoryDefinition.processed) {
-            logger.info(String.format("Directory %s has already processed", directoryDefinition.pathInRpm));
-            return;
+        // add all subdirectories
+        for (FileTreeNode directory : directories) {
+            directory.isAddChildrenUsed = true;
+            addChildrenForPath(directory, mode, dirmode, directive, owner, group);
         }
+    }
 
-        boolean addChildren =  true;
-        if (directoryDefinition.addChildren != null) addChildren = directoryDefinition.addChildren == 1;
-
-        int dirmode = DEFAULT_MODE;
-        Directive directive = Directive.NONE;
-        String owner = DEFAULT_OWNER;
-        String group = DEFAULT_GROUP;
-        boolean addParents = true;
-
-        if (directoryDefinition.dirmode != null) dirmode = directoryDefinition.dirmode;
-        if (directoryDefinition.directive != null) directive = directoryDefinition.directive;
-        if (directoryDefinition.owner != null) owner = directoryDefinition.owner;
-        if (directoryDefinition.group != null) group = directoryDefinition.group;
-        if (directoryDefinition.addParents != null) addParents = directoryDefinition.addParents == 1;
-
-        builder.addDirectory(directoryDefinition.pathInRpm, dirmode, directive, owner, group, addParents);
-
-        if (addChildren) {
-            // add all children in this directory
-            List<Path> directories = Files.list(fileOnDisk.toPath()).collect(Collectors.toList());
-            for (Path p : directories) {
-                // create RPM path for child file/directory
-                String strRpmPath = "/" + FilenameUtils.separatorsToUnix(Paths.get(
-                                directoryDefinition.pathInRpm,
-                                p.getName(p.getNameCount()-1).toString()
-                        ).toString());
-
-                if (!strRpmPath.startsWith("/")) strRpmPath = "/" + strRpmPath;
-
-                logger.debug(String.format("Constructed rpm path for %s - %s",
-                        fileOnDisk.getPath(),
-                        strRpmPath));
-                // get XFile descriptor for this path, if exists
-                XFile configEntry = getXfileForPath(strRpmPath, directoryDefinition);
-                if (p.toFile().isFile()) {
-                    processFile(p.toFile(), configEntry);
+    private void applyFileTreeToBackend(){
+        logger.info("--------------------------------");
+        logger.info("   Apply file tree to backend   ");
+        logger.info("--------------------------------");
+        Queue<FileTreeNode> queue = new LinkedList<>();
+        queue.add(root);
+        while(!queue.isEmpty()) {
+            FileTreeNode node = queue.poll();
+            if (!node.isDummy) {
+                boolean result;
+                String path = node.getPath().toString();
+                if (node.physical.isDirectory()) {
+                    result = builder.addDirectory(path, node.rights, node.directive, node.owner, node.group);
+                    logger.info(String.format("Add directory %s, physical - %s, to package, result = %s", path, node.physical, result));
                 } else {
-                    processDirectory(p.toFile(), configEntry);
+                    result = builder.addFile(path, node.physical, node.rights, node.directive, node.owner, node.group);
+                    logger.info(String.format("Add file %s, physical - %s, to package, result = %s", path, node.physical, result));
                 }
             }
-        }
-
-        directoryDefinition.processed = true;
-    }
-
-    /**
-     * Add file into RPM
-     * @param fileOnDisk - path on physical file
-     * @param fileDefinition - path to file in RPM
-     */
-    private void processFile(File fileOnDisk, XFile fileDefinition) throws NoSuchAlgorithmException, IOException {
-        logger.debug( String.format("Process file rpm рath  - %s", fileDefinition.pathInRpm ));
-        logger.debug( String.format("Process file disk рath - %s", fileOnDisk.getAbsolutePath()));
-
-        if (!fileOnDisk.exists()){
-            logger.warn(String.format("File %s not exist! May be a symlink or other non-windows stuff?", fileOnDisk.getPath()));
-            return;
-        }
-
-        if (fileDefinition.processed) {
-            logger.info(String.format("File %s has already processed", fileDefinition.pathInRpm));
-            return;
-        }
-
-        int mode = DEFAULT_MODE;
-        int dirmode = DEFAULT_DIRMODE;
-        Directive directive = Directive.NONE;
-        String owner = DEFAULT_OWNER;
-        String group = DEFAULT_GROUP;
-        boolean addParents = true;
-
-        if (fileDefinition.mode != null) mode = fileDefinition.mode;
-        if (fileDefinition.dirmode != null) dirmode = fileDefinition.dirmode;
-        if (fileDefinition.directive != null) directive = fileDefinition.directive;
-        if (fileDefinition.owner != null) owner = fileDefinition.owner;
-        if (fileDefinition.group != null) group = fileDefinition.group;
-        if (fileDefinition.addParents != null) addParents = fileDefinition.addParents == 1;
-
-
-        String strRpmPath = FilenameUtils.separatorsToUnix(fileDefinition.pathInRpm);
-        if (!strRpmPath.startsWith("/")) strRpmPath = "/" + strRpmPath;
-
-        logger.debug(String.format("Constructed rpm path for %s - %s",
-                fileOnDisk.getPath(),
-                strRpmPath));
-
-        builder.addFile(
-                strRpmPath,
-                fileOnDisk,
-                mode,
-                dirmode,
-                directive,
-                owner,
-                group,
-                addParents);
-
-        logger.info( String.format("Add file - %s", strRpmPath));
-
-        fileDefinition.processed = true;
-    }
-
-    /**
-     * Process buildins directories
-     */
-    private void loadBuildins(){
-        for (String buildin: confObject.buildInDir) {
-            logger.info(String.format("Buildin directory  - %s", buildin));
-            builder.addBuiltinDirectory(buildin);
+            queue.addAll(node.children);
         }
     }
-    public BuilderWrapper (Config config) {
-        confObject = config.getxConfig();
-        builder = new Builder();
-        builder.setPackage( confObject.packageName, confObject.packageVersion, confObject.packageRelease, confObject.packageEpoch );
-        builder.setBuildHost("localhost");
-        builder.setDescription(confObject.packageDescription);
-        builder.setLicense(confObject.packageLicense);
-        builder.setPlatform(confObject.packageArch, LINUX ); // LINUX FOREVER
-        builder.setType( BINARY );
-
-        if (confObject.fileDigestsAlg != null)
-            builder.setFileDigestAlg(confObject.fileDigestsAlg);
-
-        if (confObject.defaultDirmode != null)
-            DEFAULT_DIRMODE = config.getxConfig().defaultDirmode;
-
-        if (confObject.defaultMode != null)
-            DEFAULT_DIRMODE = config.getxConfig().defaultMode;
-    }
-
-    public void loadFiles(String input) throws IOException, NoSuchAlgorithmException {
-        loadBuildins();
-        walkFiles(input);
-    }
-
-    public void build(String outputDirectory) throws NoSuchAlgorithmException, IOException {
+    public void build(String outputDirectory){
+        applyFileTreeToBackend();
         logger.info(String.format("Save result to %s", outputDirectory));
-        String filename = builder.build(new File(outputDirectory));
+        String filename = builder.build(outputDirectory);
         logger.info(String.format("Created %s", filename));
     }
 
+    static class FileTreeNode {
+        final String name;
+        final File physical;
+        private FileTreeNode parent;
+        final Set<FileTreeNode> children;
+        int rights;
+        Directive directive; // TODO no redline dependency
+        String owner;
+        String group;
+
+        // Nodes configured directly. For example,
+        // if config has entry "/opt/hello/world"
+        // - /opt/hello/world      - isManuallyConfigured = true,  directly configured
+        // - /opt/hello/           - isManuallyConfigured = false, auto added (maybe dummy, if addParents = 0)
+        // - /opt/hello/world/any  - isManuallyConfigured = false, auto added (exists if recursive = 1)
+        boolean isManuallyConfigured;
+        boolean isAddChildrenUsed = false;
+
+        // Dummy nodes - nodes just for hierarchy - will not be saved to archive
+        boolean isDummy;
+        public FileTreeNode(
+                String name,
+                File physical,
+                int rights,
+                FileTreeNode parent,
+                Directive directive,
+                String owner,
+                String group,
+                boolean isManuallyConfigured,
+                boolean isDummy){
+            this.parent = parent;
+            this.physical = physical;
+            this.name = name;
+            this.rights = rights;
+            this.isManuallyConfigured = isManuallyConfigured;
+            this.isDummy = isDummy;
+            this.directive = directive;
+            this.owner = owner;
+            this.group = group;
+            children = new HashSet<>();
+        }
+
+        public FileTreeNode getChild(String name){
+            Optional<FileTreeNode> node = children.stream().filter(e -> e.name.equalsIgnoreCase(name)).findFirst();
+            return node.orElse(null);
+        }
+        public FileTreeNode addChild(FileTreeNode node){
+            children.add(node);
+            node.parent = this;
+            return node;
+        }
+
+        public Path getPath(){
+            Stack<FileTreeNode> path = new Stack<>();
+            FileTreeNode node = this;
+            while (node != null){
+                path.push(node);
+                node = node.parent;
+            }
+            Path construct = Paths.get("");
+            while (path.size() > 0)
+                construct = construct.resolve(path.pop().name);
+
+            return construct;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            FileTreeNode that = (FileTreeNode) o;
+            return name.equals(that.name) && parent.equals(that.parent);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(name, parent);
+        }
+
+        @Override
+        public String toString() {
+           StringBuilder builder1 = new StringBuilder() ;
+           builder1.append("'").append(getPath().toString()).append("'(");
+           if (isManuallyConfigured) builder1.append("Manually,");
+           if (isDummy) builder1.append("Dummy,");
+           if (isAddChildrenUsed) builder1.append("Children added");
+           return builder1.append(")").toString();
+        }
+    }
 }

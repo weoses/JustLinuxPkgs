@@ -1,7 +1,7 @@
 # Simple RPM builder 
 Just a simple cross-platform rpm builder, based on a [fork](https://github.com/weoses/redline) from [this library](https://github.com/craigwblake/redline)
 
-For build it using xml config like
+It using xml config like
 ```xml
 <config>
     <packageName>Hello-World</packageName>
