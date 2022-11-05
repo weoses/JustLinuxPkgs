@@ -2,15 +2,21 @@
   <pkgParams>
     <packageName>Hello-World</packageName>
     <packageVersion>10</packageVersion>
-    <packageRelease>1</packageRelease>
-    <packageEpoch>1</packageEpoch>
     <packageLicense>HIDDEN</packageLicense>
     <packageDescription>it is hello world package!</packageDescription>
-    <packageArch>NOARCH</packageArch>
-    <fileDigestsAlg>MD5</fileDigestsAlg>
+
+    <debPackageArch>all</debPackageArch>
+    <debMaintainer>user</debMaintainer>
+    <rpmPackageArch>NOARCH</rpmPackageArch>
+    <rpmFileDigestsAlg>MD5</rpmFileDigestsAlg>
+    <rpmPackageRelease>1</rpmPackageRelease>
+    <rpmPackageEpoch>1</rpmPackageEpoch>
+  </pkgParams>
+
+  <defaults>
     <defaultDirmode>0755</defaultDirmode>
     <defaultMode>744</defaultMode>
-  </pkgParams>
+  </defaults>
 
   <buildInDirs>
     <!--Zero or more repetitions:-->
@@ -21,20 +27,14 @@
     <!--Zero or more repetitions:-->
     <file>
       <pkgPath>/opt/hello/bin</pkgPath>
-      <addParents>1</addParents>
       <recursive>0</recursive>
       <mode>0555</mode>
       <dirmode>0555</dirmode>
     </file>
     <file>
       <pkgPath>/opt/hello/bin/binaries</pkgPath>
-      <addParents>0</addParents>
       <mode>700</mode>
       <dirmode>700</dirmode>
-    </file>
-    <file>
-      <pkgPath>/opt/hello/bin/binaries/1.txt</pkgPath>
-      <addParents>1</addParents>
     </file>
   </files>
 </config>

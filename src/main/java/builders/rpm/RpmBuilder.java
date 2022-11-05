@@ -1,9 +1,10 @@
 package builders.rpm;
 
 import builders.PkgBuilder;
+import jaxb.XFilePlatformSpecific;
 import jaxb.XPkgParams;
 import org.redline_rpm.Builder;
-import org.redline_rpm.payload.Directive;
+import org.redline_rpm.header.Os;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -15,17 +16,18 @@ public class RpmBuilder extends PkgBuilder {
     Logger logger = LoggerFactory.getLogger(RpmBuilder.class.getName());
     final Builder builder;
 
-    public RpmBuilder(){
+    public RpmBuilder() {
         builder = new Builder();
     }
 
 
     @Override
     protected void init(XPkgParams params) {
-        builder.setPackage(params.packageName, params.packageVersion, params.packageRelease, params.packageEpoch);
+        builder.setPackage(params.packageName, params.packageVersion, params.rpmPackageRelease, params.rpmPackageEpoch);
         builder.setDescription(params.packageDescription);
         builder.setLicense(params.packageLicense);
-        builder.setFileDigestAlg(params.fileDigestsAlg);
+        builder.setFileDigestAlg(params.rpmFileDigestsAlg);
+        builder.setPlatform(params.rpmPackageArch, Os.LINUX);
         builder.setBuildHost("localhost");
     }
 
@@ -36,25 +38,26 @@ public class RpmBuilder extends PkgBuilder {
 
     @Override
     public boolean addDirectory(String pkgPath,
-                             int dirmode,
-                             Directive directive,
-                             String owner,
-                             String group){
+                                File file,
+                                int dirmode,
+                                XFilePlatformSpecific specific,
+                                String owner,
+                                String group) {
         try {
-            builder.addDirectory(pkgPath, dirmode, directive, owner, group, false);
+            builder.addDirectory(pkgPath, dirmode, specific.rpmDirective, owner, group, false);
             return true;
-        } catch (Exception e){
+        } catch (Exception e) {
             logger.warn(e.getMessage(), e);
         }
         return false;
     }
 
     @Override
-    public boolean addFile(String pkgPath, File file, int filemode, Directive directive, String owner, String group) {
+    public boolean addFile(String pkgPath, File file, int filemode, XFilePlatformSpecific specific, String owner, String group) {
         try {
-            builder.addFile(pkgPath, file, filemode, -1, directive, owner, group, false);
+            builder.addFile(pkgPath, file, filemode, -1, specific.rpmDirective, owner, group, false);
             return true;
-        } catch (Exception e){
+        } catch (Exception e) {
             logger.warn(e.getMessage(), e);
         }
         return false;

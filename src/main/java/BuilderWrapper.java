@@ -1,5 +1,7 @@
+import Util.Util;
 import builders.PkgBuilder;
 
+import jaxb.XFilePlatformSpecific;
 import jaxb.XDefaults;
 import jaxb.XFile;
 
@@ -9,12 +11,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.security.NoSuchAlgorithmException;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import org.apache.commons.io.FilenameUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.redline_rpm.payload.Directive;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,7 +25,7 @@ public class BuilderWrapper {
 
     private final Logger logger = LoggerFactory.getLogger(BuilderWrapper.class.getName());
 
-    private Directive DEFAULT_DIRECTIVE = Directive.NONE;
+    private Directive DEFAULT_RPM_DIRECTIVE = Directive.NONE;
     private int DEFAULT_MODE = 0644;
     private int DEFAULT_DIRMODE = 0755;
     private String DEFAULT_OWNER = "root";
@@ -41,6 +43,8 @@ public class BuilderWrapper {
         PkgBuilder builder = PkgBuilder.getBuilder(
                 config.getType(),
                 config.getxConfig().pkgParams);
+
+        if (builder == null) return null;
 
         BuilderWrapper wrapper = new BuilderWrapper(builder);
         wrapper.loadBuildIns(config.getxConfig().buildInDir);
@@ -69,7 +73,7 @@ public class BuilderWrapper {
                 new File(input),
                 -1,
                 null,
-                Directive.NONE,
+                new XFilePlatformSpecific(),
                 DEFAULT_OWNER,
                 DEFAULT_GROUP,
                 false,
@@ -93,7 +97,7 @@ public class BuilderWrapper {
 
     public FileTreeNode addParentsForPath(Path path,
                                           int dirmode,
-                                          Directive directive,
+                                          XFilePlatformSpecific specific,
                                           String owner,
                                           String group,
                                           boolean isDummy) {
@@ -127,7 +131,7 @@ public class BuilderWrapper {
                         physical,
                         dirmode,
                         finder,
-                        directive,
+                        specific,
                         owner,
                         group,
                         false,
@@ -151,7 +155,7 @@ public class BuilderWrapper {
                 current.rights = dirmode;
                 current.owner = owner;
                 current.group = group;
-                current.directive = directive;
+                current.specific = specific;
                 current.isDummy = isDummy;
             }
         }
@@ -165,7 +169,7 @@ public class BuilderWrapper {
         FileTreeNode lastParentDirectory = addParentsForPath(
                 pkgFilePathObj,
                 file.dirmode,
-                file.directive,
+                file.specific,
                 file.owner,
                 file.group,
                 !file.addParents);
@@ -183,7 +187,7 @@ public class BuilderWrapper {
                     physical,
                     physical.isFile() ? file.mode : file.dirmode,
                     null,
-                    file.directive,
+                    file.specific,
                     file.owner,
                     file.group,
                     true,
@@ -194,7 +198,7 @@ public class BuilderWrapper {
                 current.owner = file.owner;
                 current.group = file.group;
                 current.rights = physical.isFile() ? file.mode : file.dirmode;
-                current.directive = file.directive;
+                current.specific = file.specific;
                 current.isManuallyConfigured = true;
             }
         }
@@ -202,7 +206,7 @@ public class BuilderWrapper {
         // add children, if children haven't already added
         if (physical.isDirectory() && file.recursive && !current.isAddChildrenUsed) {
             current.isAddChildrenUsed = true;
-            addChildrenForPath(current, file.mode, file.dirmode, file.directive, file.owner, file.group);
+            addChildrenForPath(current, file.mode, file.dirmode, file.specific, file.owner, file.group);
         }
 
     }
@@ -210,7 +214,9 @@ public class BuilderWrapper {
     private void setXFileDefaults(XFile obj){
         if (obj.mode == null) obj.mode = DEFAULT_MODE;
         if (obj.dirmode == null) obj.dirmode = DEFAULT_DIRMODE;
-        if (obj.directive == null) obj.directive = DEFAULT_DIRECTIVE;
+        if (obj.specific == null) obj.specific = new XFilePlatformSpecific();
+        if (obj.specific.rpmDirective == null) obj.specific.rpmDirective = DEFAULT_RPM_DIRECTIVE;
+        if (obj.specific.debIsConfig == null) obj.specific.debIsConfig = false;
         if (obj.owner == null) obj.owner = DEFAULT_OWNER;
         if (obj.group == null) obj.group = DEFAULT_GROUP;
         if (obj.recursive == null) obj.recursive = true;
@@ -220,7 +226,7 @@ public class BuilderWrapper {
     private void addChildrenForPath(FileTreeNode startFrom,
                                     int mode,
                                     int dirmode,
-                                    Directive directive,
+                                    XFilePlatformSpecific specific,
                                     String owner,
                                     String group) {
         Path path = startFrom.getPath();
@@ -245,7 +251,7 @@ public class BuilderWrapper {
                             file,
                             basicFileAttributes.isRegularFile() ? mode : dirmode,
                             null,
-                            directive,
+                            specific,
                             owner,
                             group,
                             false,
@@ -255,7 +261,7 @@ public class BuilderWrapper {
                     newNode.owner = owner;
                     newNode.group = group;
                     newNode.rights = physical.isFile() ? mode : dirmode;
-                    newNode.directive = directive;
+                    newNode.specific = specific;
                 }
 
                 // schedule adding children of this directory, if they haven't added already
@@ -270,37 +276,39 @@ public class BuilderWrapper {
         // add all subdirectories
         for (FileTreeNode directory : directories) {
             directory.isAddChildrenUsed = true;
-            addChildrenForPath(directory, mode, dirmode, directive, owner, group);
+            addChildrenForPath(directory, mode, dirmode, specific, owner, group);
         }
     }
 
     private void applyFileTreeToBackend(){
-        logger.info("--------------------------------");
-        logger.info("   Apply file tree to backend   ");
-        logger.info("--------------------------------");
+        logger.info("----   Apply file tree to backend   ----");
         Queue<FileTreeNode> queue = new LinkedList<>();
         queue.add(root);
         while(!queue.isEmpty()) {
             FileTreeNode node = queue.poll();
             if (!node.isDummy) {
                 boolean result;
-                String path = node.getPath().toString();
+                String path = Util.normalizePkgPathStartSlash(node.getPath().toString());
                 if (node.physical.isDirectory()) {
-                    result = builder.addDirectory(path, node.rights, node.directive, node.owner, node.group);
+                    result = builder.addDirectory(path, node.physical, node.rights, node.specific, node.owner, node.group);
                     logger.info(String.format("Add directory %s, physical - %s, to package, result = %s", path, node.physical, result));
                 } else {
-                    result = builder.addFile(path, node.physical, node.rights, node.directive, node.owner, node.group);
+                    result = builder.addFile(path, node.physical, node.rights, node.specific, node.owner, node.group);
                     logger.info(String.format("Add file %s, physical - %s, to package, result = %s", path, node.physical, result));
                 }
             }
             queue.addAll(node.children);
         }
     }
-    public void build(String outputDirectory){
+    public void build(String outputDirectory) {
         applyFileTreeToBackend();
         logger.info(String.format("Save result to %s", outputDirectory));
         String filename = builder.build(outputDirectory);
-        logger.info(String.format("Created %s", filename));
+        if (StringUtils.isEmpty(filename)) {
+            logger.error("No file created!");
+        } else {
+            logger.info(String.format("Created %s", filename));
+        }
     }
 
     static class FileTreeNode {
@@ -309,9 +317,10 @@ public class BuilderWrapper {
         private FileTreeNode parent;
         final Set<FileTreeNode> children;
         int rights;
-        Directive directive; // TODO no redline dependency
         String owner;
         String group;
+
+        XFilePlatformSpecific specific;
 
         // Nodes configured directly. For example,
         // if config has entry "/opt/hello/world"
@@ -328,7 +337,7 @@ public class BuilderWrapper {
                 File physical,
                 int rights,
                 FileTreeNode parent,
-                Directive directive,
+                XFilePlatformSpecific specific,
                 String owner,
                 String group,
                 boolean isManuallyConfigured,
@@ -339,7 +348,7 @@ public class BuilderWrapper {
             this.rights = rights;
             this.isManuallyConfigured = isManuallyConfigured;
             this.isDummy = isDummy;
-            this.directive = directive;
+            this.specific = specific;
             this.owner = owner;
             this.group = group;
             children = new HashSet<>();

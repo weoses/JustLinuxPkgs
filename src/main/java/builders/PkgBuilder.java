@@ -1,40 +1,44 @@
 package builders;
 
+import jaxb.XFilePlatformSpecific;
 import jaxb.XPkgParams;
-import org.redline_rpm.Builder;
-import org.redline_rpm.payload.Directive;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
-import java.io.IOException;
-import java.lang.reflect.InvocationTargetException;
-import java.security.NoSuchAlgorithmException;
+
 
 public abstract class PkgBuilder {
 
-    public static PkgBuilder getBuilder(BuildType buildType, XPkgParams params)  {
+    static Logger logger = LoggerFactory.getLogger(PkgBuilder.class.getName());
+    public static PkgBuilder getBuilder(BuildType buildType, XPkgParams params) {
         try {
             Class<? extends PkgBuilder> builderClass = buildType.getImpl();
-            PkgBuilder builder =  builderClass.getConstructor().newInstance();
+            PkgBuilder builder = builderClass.getConstructor().newInstance();
             builder.init(params);
             return builder;
         } catch (Exception e) {
-            throw new RuntimeException(e);
+            logger.error("Cant create builder - "+e, e);
+            return null;
         }
     }
 
     protected abstract void init(XPkgParams params);
+
     public abstract void addBuildin(String pkgPath);
+
     public abstract boolean addDirectory(String pkgPath,
-                      int dirmode,
-                      Directive directive,
-                      String owner,
-                      String group);
+                                         File file,
+                                         int dirmode,
+                                         XFilePlatformSpecific specific,
+                                         String owner,
+                                         String group);
 
     public abstract boolean addFile(
             String pkgPath,
             File file,
             int filemode,
-            Directive directive,
+            XFilePlatformSpecific directive,
             String owner,
             String group);
 

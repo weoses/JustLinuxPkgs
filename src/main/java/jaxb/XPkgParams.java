@@ -1,7 +1,5 @@
 package jaxb;
 
-import jaxb.attributeAdapters.ArchAdapter;
-import jaxb.attributeAdapters.ModeParserAdapter;
 import jaxb.attributeClasses.AttributeStringAdapter;
 import org.redline_rpm.header.Architecture;
 import org.redline_rpm.header.FileDigestsAlg;
@@ -14,22 +12,31 @@ public class XPkgParams {
     public String packageName;
     @XmlJavaTypeAdapter(AttributeStringAdapter.class)
     public String packageVersion;
-
-    @XmlElement(defaultValue = "1")
-    public int packageEpoch;
-
     @XmlJavaTypeAdapter(AttributeStringAdapter.class)
-    @XmlElement(defaultValue = "1")
-    public String packageRelease;
-
-    @XmlJavaTypeAdapter(AttributeStringAdapter.class)
-    @XmlElement(defaultValue = "HIDDEN")
     public String packageLicense;
 
     @XmlJavaTypeAdapter(AttributeStringAdapter.class)
     public String packageDescription;
 
-    public Architecture packageArch;
 
-    public FileDigestsAlg fileDigestsAlg;
+
+
+
+    /* specific */
+    /* DEB      */
+    public DebPackageArch debPackageArch;
+
+    @XmlJavaTypeAdapter(AttributeStringAdapter.class)
+    public String debMaintainer;
+
+    /* RPM     */
+    @XmlElement(defaultValue = "1")
+    public int rpmPackageEpoch;
+
+    @XmlJavaTypeAdapter(AttributeStringAdapter.class)
+    @XmlElement(defaultValue = "1")
+    public String rpmPackageRelease;
+    public FileDigestsAlg rpmFileDigestsAlg;
+
+    public Architecture rpmPackageArch;
 }

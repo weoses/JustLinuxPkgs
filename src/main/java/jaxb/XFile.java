@@ -1,9 +1,7 @@
 package jaxb;
 
-import jaxb.attributeAdapters.DirectiveAdapter;
 import jaxb.attributeAdapters.ModeParserAdapter;
 import jaxb.attributeAdapters.PathUnixAdapter;
-import org.redline_rpm.payload.Directive;
 
 import javax.xml.bind.annotation.XmlElement;
 import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
@@ -20,8 +18,8 @@ public class XFile {
     public String group;
     public Boolean recursive;
     public Boolean addParents;
-    @XmlJavaTypeAdapter(DirectiveAdapter.class)
-    public Directive directive;
+
+    public XFilePlatformSpecific specific;
 
 }
 
