@@ -105,7 +105,7 @@ public class DebBuilder extends PkgBuilder {
     private File createControl(String outputFolder){
         try {
             Path controlTarGz = Paths.get(outputFolder, builderId+"control.tar.gz");
-            logger.info(String.format("Creating control file - %s", controlTarGz));
+            logger.info(String.format("Creating temp control file - %s", controlTarGz));
             try (OutputStream fOut = Files.newOutputStream(controlTarGz);
                  GzipCompressorOutputStream gzOut = new GzipCompressorOutputStream(fOut);
                  TarArchiveOutputStream tOut = new TarArchiveOutputStream(gzOut)) {
@@ -144,7 +144,7 @@ public class DebBuilder extends PkgBuilder {
     private File createData(String outputFolder){
         try {
             Path dataTarGz = Paths.get(outputFolder, builderId+"data.tar.gz");
-            logger.info(String.format("Creating data file - %s", dataTarGz));
+            logger.info(String.format("Creating temp data file - %s", dataTarGz));
             try (OutputStream fOut = Files.newOutputStream(dataTarGz);
                  GzipCompressorOutputStream gzOut = new GzipCompressorOutputStream(fOut);
                  TarArchiveOutputStream tOut = new TarArchiveOutputStream(gzOut)) {

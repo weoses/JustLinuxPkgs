@@ -54,6 +54,7 @@ public class BuilderWrapper {
     }
     public void loadBuildIns(List<String> buildIns){
         if (buildIns == null) return;
+        logger.info("----   Load buildins   ----");
         for (String buildin: buildIns) {
             logger.info(String.format("Buildin directory  - %s", buildin));
             builder.addBuildin(buildin);
@@ -67,10 +68,11 @@ public class BuilderWrapper {
         if (defaults.defaultMode != null)
             DEFAULT_MODE = defaults.defaultMode;
     }
-    public void loadFiles(String input, List<XFile> xFiles) {
+    public void loadFiles(File input, List<XFile> xFiles) {
+        logger.info("----   Load files   ----");
         root = new FileTreeNode(
                 "",
-                new File(input),
+                input,
                 -1,
                 null,
                 new XFilePlatformSpecific(),
@@ -91,8 +93,8 @@ public class BuilderWrapper {
         }
     }
 
-    private File pkgPathToFile(String pkgPath, String root){
-        return Paths.get(root, FilenameUtils.separatorsToSystem(pkgPath)).toFile();
+    private File pkgPathToFile(String pkgPath, File root){
+        return Paths.get(root.getPath(), FilenameUtils.separatorsToSystem(pkgPath)).toFile();
     }
 
     public FileTreeNode addParentsForPath(Path path,
@@ -116,7 +118,7 @@ public class BuilderWrapper {
                 pkgPath = nextNode;
             }
             String strPkgPath = pkgPath.toString();
-            File physical = pkgPathToFile(strPkgPath, root.physical.toString());
+            File physical = pkgPathToFile(strPkgPath, root.physical);
             if (!physical.exists()){
                 logger.warn(String.format("Cant create parent elements for path %s, directory %s not exist. Physical path - %s", path, strPkgPath, physical));
                 return null;
@@ -230,7 +232,7 @@ public class BuilderWrapper {
                                     String owner,
                                     String group) {
         Path path = startFrom.getPath();
-        File physical = pkgPathToFile(path.toString(), root.physical.toString());
+        File physical = pkgPathToFile(path.toString(), root.physical);
         if (physical.isFile()) return;
         Set<FileTreeNode> directories = new HashSet<>();
 
@@ -300,10 +302,10 @@ public class BuilderWrapper {
             queue.addAll(node.children);
         }
     }
-    public void build(String outputDirectory) {
+    public void build(File outputDirectory) {
         applyFileTreeToBackend();
-        logger.info(String.format("Save result to %s", outputDirectory));
-        String filename = builder.build(outputDirectory);
+        logger.info(String.format("----  Save result to %s  ----", outputDirectory));
+        String filename = builder.build(outputDirectory.getPath());
         if (StringUtils.isEmpty(filename)) {
             logger.error("No file created!");
         } else {
