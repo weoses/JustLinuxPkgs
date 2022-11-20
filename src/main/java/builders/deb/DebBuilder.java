@@ -26,11 +26,17 @@ public class DebBuilder extends PkgBuilder {
     StringBuilder controlFile = new StringBuilder();
     StringBuilder md5SumsFile = new StringBuilder();
     StringBuilder confFile = new StringBuilder();
-    Set<FileObject> files = new HashSet<>();
 
+    String preInstallScript;
+    String postInstallScript;
+    String preRmScript;
+    String postRmScript;
+
+    Set<FileObject> files = new HashSet<>();
 
     //if two builders running at one time
     String builderId = String.valueOf(new Random().nextInt());
+    Set<String> buildInDirs = new HashSet<>();
     String debFileName;
 
     private void controlHeader(String header, String value){
@@ -48,6 +54,7 @@ public class DebBuilder extends PkgBuilder {
     private void confFileEntry(String pkgPath){
         confFile.append(pkgPath).append("\n");
     }
+
     @Override
     protected void init(XPkgParams params) {
 
@@ -72,19 +79,32 @@ public class DebBuilder extends PkgBuilder {
 
     @Override
     public void addBuildin(String pkgPath) {
-        logger.warn("Buildins not supported on DEB");
+        Path p  = Paths.get(pkgPath);
+        do {
+            buildInDirs.add(Util.normalizeDirectoryPath(p.toString()));
+        } while ( (p = p.getParent()) != null);
     }
 
     @Override
     public boolean addDirectory(String pkgPath, File file, int dirmode, XFilePlatformSpecific specific, String owner, String group) {
-        files.add(new FileObject(pkgPath, dirmode, file, owner, group, true));
+        files.add(new FileObject(Util.normalizeDirectoryPath(pkgPath), dirmode, file, owner, group, true));
         return true;
     }
 
+    private void applyBuildInPaths(){
+        for (String buildIn : buildInDirs) {
+             for (Iterator<FileObject> iter = files.iterator(); iter.hasNext();) {
+                 FileObject next = iter.next();
+                 if (!next.directory) continue;
+                 if (next.pkgPath.equals(buildIn))
+                     iter.remove();
+            }
+        }
+    }
 
     @Override
     public boolean addFile(String pkgPath, File file, int filemode, XFilePlatformSpecific specific, String owner, String group) {
-        String nonSlashPath =  Util.normalizePkgPath(pkgPath);
+        String nonSlashPath =  Util.normalizePkgPathNoSlash(pkgPath);
         try (InputStream is = Files.newInputStream(file.toPath())) {
             String md5 = org.apache.commons.codec.digest.DigestUtils.md5Hex(is);
             logger.debug(String.format("File %s, md5 %s", pkgPath, file));
@@ -97,9 +117,28 @@ public class DebBuilder extends PkgBuilder {
         if (specific.debIsConfig){
             confFileEntry(nonSlashPath);
         }
-
-        files.add(new FileObject(pkgPath, filemode, file, owner, group, false));
+        files.add(new FileObject(nonSlashPath, filemode, file, owner, group, false));
         return true;
+    }
+
+    @Override
+    public void setPreInstallScript(String script) {
+        preInstallScript = script;
+    }
+
+    @Override
+    public void setPostInstallScript(String script) {
+        postInstallScript = script;
+    }
+
+    @Override
+    public void setPreRmScript(String script) {
+        preRmScript = script;
+    }
+
+    @Override
+    public void setPostRmScript(String script) {
+        postRmScript = script;
     }
 
     private File createControl(String outputFolder){
@@ -110,24 +149,79 @@ public class DebBuilder extends PkgBuilder {
                  GzipCompressorOutputStream gzOut = new GzipCompressorOutputStream(fOut);
                  TarArchiveOutputStream tOut = new TarArchiveOutputStream(gzOut)) {
 
-                TarArchiveEntry dotEntry = new TarArchiveEntry("./");
-                dotEntry.setSize(0);
-                tOut.putArchiveEntry(dotEntry);
-                tOut.closeArchiveEntry();
+                {
+                    TarArchiveEntry dotEntry = new TarArchiveEntry("./");
+                    dotEntry.setSize(0);
+                    tOut.putArchiveEntry(dotEntry);
+                    tOut.closeArchiveEntry();
+                }
 
-                byte[] controlData = controlFile.toString().getBytes(StandardCharsets.UTF_8);
-                TarArchiveEntry controlEntry = new TarArchiveEntry("./control");
-                controlEntry.setSize(controlData.length);
-                tOut.putArchiveEntry(controlEntry);
-                tOut.write(controlData);
-                tOut.closeArchiveEntry();
+                {
+                    byte[] data = controlFile.toString().getBytes(StandardCharsets.UTF_8);
+                    TarArchiveEntry entry = new TarArchiveEntry("./control");
+                    entry.setSize(data.length);
+                    tOut.putArchiveEntry(entry);
+                    tOut.write(data);
+                    tOut.closeArchiveEntry();
+                }
 
-                byte[] md5sumsData = md5SumsFile.toString().getBytes(StandardCharsets.UTF_8);
-                TarArchiveEntry md5sumsEntry = new TarArchiveEntry("./md5sums");
-                md5sumsEntry.setSize(md5sumsData.length);
-                tOut.putArchiveEntry(md5sumsEntry);
-                tOut.write(md5sumsData);
-                tOut.closeArchiveEntry();
+                if (confFile.length() > 0) {
+                    byte[] data = confFile.toString().getBytes(StandardCharsets.UTF_8);
+                    TarArchiveEntry entry = new TarArchiveEntry("./conffiles");
+                    entry.setSize(data.length);
+                    tOut.putArchiveEntry(entry);
+                    tOut.write(data);
+                    tOut.closeArchiveEntry();
+                }
+
+                {
+                    byte[] data = md5SumsFile.toString().getBytes(StandardCharsets.UTF_8);
+                    TarArchiveEntry entry = new TarArchiveEntry("./md5sums");
+                    entry.setSize(data.length);
+                    tOut.putArchiveEntry(entry);
+                    tOut.write(data);
+                    tOut.closeArchiveEntry();
+                }
+
+                if (StringUtils.isNoneEmpty(preInstallScript)){
+                    byte[] data = preInstallScript.getBytes(StandardCharsets.UTF_8);
+                    TarArchiveEntry entry = new TarArchiveEntry("./preinst");
+                    entry.setSize(data.length);
+                    entry.setMode(554);
+                    tOut.putArchiveEntry(entry);
+                    tOut.write(data);
+                    tOut.closeArchiveEntry();
+                }
+
+                if (StringUtils.isNoneEmpty(postInstallScript)){
+                    byte[] data = postInstallScript.getBytes(StandardCharsets.UTF_8);
+                    TarArchiveEntry entry = new TarArchiveEntry("./postinst");
+                    entry.setSize(data.length);
+                    entry.setMode(554);
+                    tOut.putArchiveEntry(entry);
+                    tOut.write(data);
+                    tOut.closeArchiveEntry();
+                }
+
+                if (StringUtils.isNoneEmpty(preRmScript)){
+                    byte[] data = preRmScript.getBytes(StandardCharsets.UTF_8);
+                    TarArchiveEntry entry = new TarArchiveEntry("./prerm");
+                    entry.setSize(data.length);
+                    entry.setMode(554);
+                    tOut.putArchiveEntry(entry);
+                    tOut.write(data);
+                    tOut.closeArchiveEntry();
+                }
+
+                if (StringUtils.isNoneEmpty(postRmScript)){
+                    byte[] data = postRmScript.getBytes(StandardCharsets.UTF_8);
+                    TarArchiveEntry entry = new TarArchiveEntry("./postrm");
+                    entry.setSize(data.length);
+                    entry.setMode(554);
+                    tOut.putArchiveEntry(entry);
+                    tOut.write(data);
+                    tOut.closeArchiveEntry();
+                }
 
                 tOut.finish();
 
@@ -142,6 +236,7 @@ public class DebBuilder extends PkgBuilder {
     }
 
     private File createData(String outputFolder){
+        applyBuildInPaths();
         try {
             Path dataTarGz = Paths.get(outputFolder, builderId+"data.tar.gz");
             logger.info(String.format("Creating temp data file - %s", dataTarGz));
@@ -162,7 +257,7 @@ public class DebBuilder extends PkgBuilder {
                         .collect(Collectors.toList());
 
                 for(FileObject  f : sortedList) {
-                    TarArchiveEntry entry = new TarArchiveEntry(f.physical, Util.normalizePkgPath(Paths.get("./", f.pkgPath).toString()));
+                    TarArchiveEntry entry = new TarArchiveEntry(f.physical, Util.normalizePkgPathNoSlash(Paths.get("./", f.pkgPath).toString()));
                     entry.setUserName(f.owner);
                     entry.setGroupName(f.group);
                     entry.setMode(f.rights);

@@ -49,6 +49,7 @@ public class RpmBuilder extends PkgBuilder {
         } catch (Exception e) {
             logger.warn(e.getMessage(), e);
         }
+
         return false;
     }
 
@@ -61,6 +62,26 @@ public class RpmBuilder extends PkgBuilder {
             logger.warn(e.getMessage(), e);
         }
         return false;
+    }
+
+    @Override
+    public void setPreInstallScript(String script) {
+        builder.setPreInstallScript(script);
+    }
+
+    @Override
+    public void setPostInstallScript(String script) {
+        builder.setPostInstallScript(script);
+    }
+
+    @Override
+    public void setPreRmScript(String script) {
+        builder.setPreUninstallScript(script);
+    }
+
+    @Override
+    public void setPostRmScript(String script) {
+        builder.setPostUninstallScript(script);
     }
 
     @Override

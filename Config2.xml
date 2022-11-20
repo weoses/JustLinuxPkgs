@@ -1,20 +1,20 @@
 <config>
   <pkgParams>
-    <!--Package Name. available 'fromFile' attribute-->
+    <!--Package Name-->
     <packageName>Hello-world</packageName>
-    <!--Package version. available 'fromFile' attribute-->
+    <!--Package version-->
     <packageVersion>10</packageVersion>
-    <!--package license. available 'fromFile' attribute-->
+    <!--package license:-->
     <packageLicense>LICENSE</packageLicense>
-    <!--package description. available 'fromFile' attribute-->
+    <!--package description:-->
     <packageDescription>a big data</packageDescription>
     <!--Arch for DEB package. One of dpkg-architecture -L -->
     <debPackageArch>amd64</debPackageArch>
-    <!--Maintainer for DEB package. available 'fromFile' attribute-->
+    <!--Maintainer for DEB package-->
     <debMaintainer>string</debMaintainer>
-    <!--Epoch for rpm package. available 'fromFile' attribute-->
+    <!--Epoch for rpm package-->
     <rpmPackageEpoch>1</rpmPackageEpoch>
-    <!--Release for rpm package. available 'fromFile' attribute-->
+    <!--Release for rpm package-->
     <rpmPackageRelease>1</rpmPackageRelease>
     <!--Optional:-->
     <!--Alg for hash sums in package.
@@ -31,10 +31,10 @@
   <defaults>
     <!--Optional:-->
     <!--Default rights for directories. If not set, is 0755 -->
-    <defaultDirmode>0755</defaultDirmode>
+    <defaultDirmode></defaultDirmode>
     <!--Optional:-->
     <!--Default rights for files. If not set, is 0644 -->
-    <defaultMode>0755</defaultMode>
+    <defaultMode>string</defaultMode>
   </defaults>
   <!--Optional:-->
   <buildInDirs>
@@ -88,16 +88,16 @@
   <!--Optional:-->
   <scripts>
     <!--Optional:-->
-    <!--Pre install script. available 'fromFile' attribute-->
-    <preInstallScript fromFile="preinst.sh"/>
+    <!--Pre install script-->
+    <preInstallScript fromFile="string">string</preInstallScript>
     <!--Optional:-->
-    <!--Post install script. available 'fromFile' attribute-->
-    <postInstallScript fromFile="postinst.sh"/>
+    <!--Post install script-->
+    <postInstallScript fromFile="string">string</postInstallScript>
     <!--Optional:-->
-    <!--Pre uninstall script. available 'fromFile' attribute-->
-    <preRmScript fromFile="prerm.sh"/>
+    <!--Pre uninstall script-->
+    <preRmScript fromFile="string">string</preRmScript>
     <!--Optional:-->
-    <!--Post uninstall script. available 'fromFile' attribute-->
-    <postRmScript fromFile="postrm.sh"/>
+    <!--Post uninstall script-->
+    <postRmScript fromFile="string">string</postRmScript>
   </scripts>
 </config>

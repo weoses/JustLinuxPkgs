@@ -42,5 +42,11 @@ public abstract class PkgBuilder {
             String owner,
             String group);
 
+    public abstract void setPreInstallScript(String script);
+    public abstract void setPostInstallScript(String script);
+    public abstract void setPreRmScript(String script);
+    public abstract void setPostRmScript(String script);
+
+
     public abstract String build(String outputFolder);
 }

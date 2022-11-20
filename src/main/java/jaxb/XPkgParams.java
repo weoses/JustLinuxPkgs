@@ -14,13 +14,8 @@ public class XPkgParams {
     public String packageVersion;
     @XmlJavaTypeAdapter(AttributeStringAdapter.class)
     public String packageLicense;
-
     @XmlJavaTypeAdapter(AttributeStringAdapter.class)
     public String packageDescription;
-
-
-
-
 
     /* specific */
     /* DEB      */

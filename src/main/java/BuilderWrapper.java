@@ -15,6 +15,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import jaxb.XScripts;
 import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.redline_rpm.payload.Directive;
@@ -49,9 +50,20 @@ public class BuilderWrapper {
         BuilderWrapper wrapper = new BuilderWrapper(builder);
         wrapper.loadBuildIns(config.getxConfig().buildInDir);
         wrapper.loadDefaults(config.getxConfig().defaults);
+        wrapper.loadScripts(config.getxConfig().scripts);
         wrapper.loadFiles(config.getInput(), config.getxConfig().file);
         return  wrapper;
     }
+
+    private void loadScripts(XScripts scripts) {
+        if (scripts == null) return;
+
+        if (StringUtils.isNoneEmpty(scripts.preInstallScript)) builder.setPreInstallScript(scripts.preInstallScript);
+        if (StringUtils.isNoneEmpty(scripts.postInstallScript)) builder.setPostInstallScript(scripts.postInstallScript);
+        if (StringUtils.isNoneEmpty(scripts.preRmScript)) builder.setPreRmScript(scripts.preRmScript);
+        if (StringUtils.isNoneEmpty(scripts.postRmScript)) builder.setPostRmScript(scripts.postRmScript);
+    }
+
     public void loadBuildIns(List<String> buildIns){
         if (buildIns == null) return;
         logger.info("----   Load buildins   ----");
@@ -290,7 +302,7 @@ public class BuilderWrapper {
             FileTreeNode node = queue.poll();
             if (!node.isDummy) {
                 boolean result;
-                String path = Util.normalizePkgPathStartSlash(node.getPath().toString());
+                String path = Util.normalizePkgPathNoSlash(node.getPath().toString());
                 if (node.physical.isDirectory()) {
                     result = builder.addDirectory(path, node.physical, node.rights, node.specific, node.owner, node.group);
                     logger.info(String.format("Add directory %s, physical - %s, to package, result = %s", path, node.physical, result));

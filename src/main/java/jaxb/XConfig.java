@@ -13,8 +13,11 @@ public class XConfig {
     public XDefaults defaults;
     @XmlElementWrapper(name = "buildInDirs")
     public List<String> buildInDir;
+
     @XmlElementWrapper(name = "files")
     public List<XFile> file;
+
+    public XScripts scripts;
 
     public XConfig(){
         buildInDir = new ArrayList<>();
