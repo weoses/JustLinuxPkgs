@@ -24,15 +24,10 @@
   </buildInDirs>
 
   <files>
-
     <physicalRoot>./sample/sample1/</physicalRoot>
 
     <file pkgPath="/opt/hello_application">
       <recursive>true</recursive>
-    </file>
-
-    <file pkgPath="/opt">
-      <recursive>false</recursive>
     </file>
 
     <file pkgPath="/opt/hello_application/bin">
