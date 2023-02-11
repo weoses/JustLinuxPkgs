@@ -1,0 +1,49 @@
+<config>
+  <pkgParams>
+    <packageName>Sample-1</packageName>
+    <packageVersion>0.1</packageVersion>
+    <packageLicense>LICENSE</packageLicense>
+    <packageDescription>Sample package</packageDescription>
+    <debPackageArch>all</debPackageArch>
+    <debMaintainer>I am</debMaintainer>
+    <rpmPackageEpoch>1</rpmPackageEpoch>
+    <rpmPackageRelease>1</rpmPackageRelease>
+    <rpmFileDigestsAlg>MD5</rpmFileDigestsAlg>
+    <rpmPackageArch>NOARCH</rpmPackageArch>
+  </pkgParams>
+
+  <defaults>
+    <defaultDirmode>0755</defaultDirmode>
+    <defaultMode>0644</defaultMode>
+    <defaultOwner>root</defaultOwner>
+    <defaultGroup>root</defaultGroup>
+  </defaults>
+
+  <buildInDirs>
+    <buildInDir>/opt/hello_application</buildInDir>
+  </buildInDirs>
+
+  <files>
+
+    <physicalRoot>./sample/sample1/</physicalRoot>
+
+    <file pkgPath="/opt/hello_application">
+      <recursive>true</recursive>
+    </file>
+
+    <file pkgPath="/opt">
+      <recursive>false</recursive>
+    </file>
+
+    <file pkgPath="/opt/hello_application/bin">
+      <recursive>true</recursive>
+      <mode>755</mode>
+    </file>
+
+  </files>
+
+  <scripts>
+    <preInstallScript fromFile="./sample/scripts/preinst.sh"/>
+    <postInstallScript fromFile="./sample/scripts/postinst.sh"/>
+  </scripts>
+</config>

@@ -3,13 +3,16 @@ package jaxb;
 import jaxb.attributeAdapters.ModeParserAdapter;
 import jaxb.attributeAdapters.PathUnixAdapter;
 
+import javax.xml.bind.annotation.XmlAttribute;
 import javax.xml.bind.annotation.XmlElement;
 import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
 
-public class XFile {
+public class XFilePhysical {
     @XmlJavaTypeAdapter(PathUnixAdapter.class)
-    @XmlElement(required = true)
+    @XmlAttribute(required = true)
     public String pkgPath;
+    @XmlAttribute
+    public String physicalPath;
     @XmlJavaTypeAdapter(ModeParserAdapter.class)
     public Integer mode;
     @XmlJavaTypeAdapter(ModeParserAdapter.class)
@@ -17,7 +20,7 @@ public class XFile {
     public String owner;
     public String group;
     public Boolean recursive;
-    public Boolean addParents;
+    public Boolean addParents = false;//Not working
 
     public XFilePlatformSpecific specific;
 

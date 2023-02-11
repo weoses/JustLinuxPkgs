@@ -7,6 +7,6 @@ import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
 
 public class XFilePlatformSpecific {
     @XmlJavaTypeAdapter(DirectiveAdapter.class)
-    public Directive rpmDirective;
-    public Boolean debIsConfig;
+    public Directive rpmDirective = Directive.NONE;
+    public boolean debIsConfig;
 }

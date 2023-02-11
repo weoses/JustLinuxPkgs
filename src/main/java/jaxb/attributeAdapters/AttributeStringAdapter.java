@@ -1,4 +1,6 @@
-package jaxb.attributeClasses;
+package jaxb.attributeAdapters;
+
+import jaxb.attributeClasses.Attribute;
 
 import javax.xml.bind.annotation.adapters.XmlAdapter;
 

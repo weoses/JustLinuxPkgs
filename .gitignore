@@ -1,7 +1,6 @@
 .idea
-bin
 root
 target
-text.xml
-test.xml
+config.xml
 jar
+sample/*.deb

@@ -1,6 +1,5 @@
 package jaxb.attributeAdapters;
 
-import org.redline_rpm.header.Architecture;
 import org.redline_rpm.header.FileDigestsAlg;
 
 import javax.xml.bind.annotation.adapters.XmlAdapter;

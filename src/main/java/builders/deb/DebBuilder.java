@@ -96,8 +96,10 @@ public class DebBuilder extends PkgBuilder {
              for (Iterator<FileObject> iter = files.iterator(); iter.hasNext();) {
                  FileObject next = iter.next();
                  if (!next.directory) continue;
-                 if (next.pkgPath.equals(buildIn))
+                 if (next.pkgPath.equals(buildIn)) {
+                     logger.info("Skip directory {}, it s build in", next.pkgPath);
                      iter.remove();
+                 }
             }
         }
     }

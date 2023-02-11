@@ -32,7 +32,7 @@ public class Attribute {
                 try {
                     value = FileUtils.readFileToString(new File(fromFile), StandardCharsets.UTF_8);
                 } catch (Exception e){
-                    logger.warn(String.format("Cant load value - from file was %s", fromFile));
+                    logger.warn(String.format("Cant load value - 'fromFile' was %s", fromFile));
                     logger.warn(e.toString());
                 }
             }

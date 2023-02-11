@@ -1,6 +1,6 @@
 package jaxb;
 
-import jaxb.attributeClasses.AttributeStringAdapter;
+import jaxb.attributeAdapters.AttributeStringAdapter;
 import org.redline_rpm.header.Architecture;
 import org.redline_rpm.header.FileDigestsAlg;
 

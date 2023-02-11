@@ -1,9 +1,10 @@
 import Util.Util;
+import adapters.ConfigFileAdapter;
 import builders.PkgBuilder;
 
 import jaxb.XFilePlatformSpecific;
 import jaxb.XDefaults;
-import jaxb.XFile;
+import jaxb.XFilePhysical;
 
 import java.io.File;
 import java.io.IOException;
@@ -39,6 +40,7 @@ public class BuilderWrapper {
     private BuilderWrapper(PkgBuilder builder){
         this.builder = builder;
     }
+
     public static BuilderWrapper createBuilderWrapper (Config config) {
 
         PkgBuilder builder = PkgBuilder.getBuilder(
@@ -51,7 +53,7 @@ public class BuilderWrapper {
         wrapper.loadBuildIns(config.getxConfig().buildInDir);
         wrapper.loadDefaults(config.getxConfig().defaults);
         wrapper.loadScripts(config.getxConfig().scripts);
-        wrapper.loadFiles(config.getInput(), config.getxConfig().file);
+        wrapper.loadFiles(new File(config.getxConfig().files.physicalRoot), new ConfigFileAdapter(config.getxConfig().files).process());
         return  wrapper;
     }
 
@@ -72,6 +74,7 @@ public class BuilderWrapper {
             builder.addBuildin(buildin);
         }
     }
+
     public void loadDefaults(XDefaults defaults){
         if (defaults == null) return;
 
@@ -79,8 +82,26 @@ public class BuilderWrapper {
             DEFAULT_DIRMODE = defaults.defaultDirmode;
         if (defaults.defaultMode != null)
             DEFAULT_MODE = defaults.defaultMode;
+        if (defaults.defaultOwner != null)
+            DEFAULT_OWNER = defaults.defaultOwner;
+        if (defaults.defaultGroup != null)
+            DEFAULT_GROUP = defaults.defaultGroup;
     }
-    public void loadFiles(File input, List<XFile> xFiles) {
+
+    /**
+     * load files
+     *  loadFiles
+     *   -> create root node
+     *   -> (recursive for all entries) processConfigEntry()
+     *     -> addParentsForPath()
+     *       -> (recursive for all upper dirs) createNodes
+     *     -> addFile()
+     *     -> (if dir && recursive) addChildrenForPath()
+     *       -> (recursive for all physical files) addFile()
+     * @param input physical root directory
+     * @param xFiles files in config
+     */
+    public void loadFiles(File input, List<XFilePhysical> xFiles) {
         logger.info("----   Load files   ----");
         root = new FileTreeNode(
                 "",
@@ -93,15 +114,22 @@ public class BuilderWrapper {
                 false,
                 true);
 
-        for (XFile fileDefinition : xFiles) {
-            File physical = pkgPathToFile(fileDefinition.pkgPath, input);
+        for (XFilePhysical fileDefinition : xFiles) {
+            // if physical path is defined, use it. Or use root path + relative pkg path.
+            File physical;
+            if (StringUtils.isNotEmpty(fileDefinition.physicalPath )){
+                physical = new File(fileDefinition.physicalPath);
+            } else {
+                physical = pkgPathToFile(fileDefinition.pkgPath, input);
+            }
+
             if (!physical.exists()){
                 logger.warn(String.format("File %s not exist on disk, search path - %s", fileDefinition.pkgPath, physical));
                 continue;
             }
 
             setXFileDefaults(fileDefinition);
-            processXFile(fileDefinition, physical);
+            processConfigEntry(fileDefinition, physical);
         }
     }
 
@@ -110,10 +138,7 @@ public class BuilderWrapper {
     }
 
     public FileTreeNode addParentsForPath(Path path,
-                                          int dirmode,
-                                          XFilePlatformSpecific specific,
-                                          String owner,
-                                          String group,
+                                          XFilePhysical configTemplate,
                                           boolean isDummy) {
         FileTreeNode finder = root;
         Path pkgPath = null;
@@ -129,63 +154,78 @@ public class BuilderWrapper {
             } else {
                 pkgPath = nextNode;
             }
-            String strPkgPath = pkgPath.toString();
-            File physical = pkgPathToFile(strPkgPath, root.physical);
-            if (!physical.exists()){
-                logger.warn(String.format("Cant create parent elements for path %s, directory %s not exist. Physical path - %s", path, strPkgPath, physical));
-                return null;
-            }
+//            String strPkgPath = pkgPath.toString();
+//            File physical = pkgPathToFile(strPkgPath, root.physical);
+//            if (!physical.exists()){
+//                logger.warn(String.format("Cant create parent elements for path %s, directory %s not exist. Physical path - %s", path, strPkgPath, physical));
+//                return null;
+//            }
 
             // Get or create next node
-            FileTreeNode current = finder.getChild(nodeName);
-            if (current == null) {
-                logger.info(String.format("Add parent %s, physical - %s", finder.getPath().resolve(nodeName),  physical));
-                current = new FileTreeNode(
-                        nodeName,
-                        physical,
-                        dirmode,
-                        finder,
-                        specific,
-                        owner,
-                        group,
-                        false,
-                        isDummy);
-                finder.addChild(current);
-            } else {
-                nodesPath.add(current);
-            }
 
-            finder = current;
+            finder = addFile(finder, nodeName, new File("."), configTemplate, false, false, true);
         }
 
-        if (!isDummy) {
-            // going back from farest element in path and setting new directory rights until the manually-configured directory found
-            while (nodesPath.size() > 0) {
-                FileTreeNode current = nodesPath.pop();
-                if (current.isManuallyConfigured) {
-                    break;
-                }
-                logger.info(String.format("Edit parent %s, physical - %s", current, current.physical));
-                current.rights = dirmode;
-                current.owner = owner;
-                current.group = group;
-                current.specific = specific;
-                current.isDummy = isDummy;
-            }
-        }
+//        if (!isDummy) {
+//            // going back from farest element in path and setting new directory rights until the manually-configured directory found
+//            while (nodesPath.size() > 0) {
+//                FileTreeNode current = nodesPath.pop();
+//                if (current.isManuallyConfigured) {
+//                    break;
+//                }
+//                logger.info(String.format("Edit parent %s, physical - %s", current, current.physical));
+//                current.rights = dirmode;
+//                current.owner = owner;
+//                current.group = group;
+//                current.specific = specific;
+//                current.isDummy = isDummy;
+//            }
+//        }
         return finder;
     }
 
-    public void processXFile(XFile file, File physical) {
+
+    private FileTreeNode addFile(FileTreeNode parent,
+                                 String filename,
+                                 File physical,
+                                 XFilePhysical configTemplate,
+                                 boolean manually,
+                                 boolean override,
+                                 boolean dummy){
+        FileTreeNode current = parent.getChild(filename);
+        if (current == null) {
+            logger.info(String.format("Add %s, physical - %s", parent.getPath().resolve(filename),  physical));
+            current = parent.addChild(new FileTreeNode(
+                    filename,
+                    physical,
+                    physical.isFile() ? configTemplate.mode : configTemplate.dirmode,
+                    null,
+                    configTemplate.specific,
+                    configTemplate.owner,
+                    configTemplate.group,
+                    manually,
+                    dummy));
+        } else if (override){
+            if (!current.isManuallyConfigured){
+                logger.info(String.format("Edit %s, physical - %s", current, physical));
+                current.owner = configTemplate.owner;
+                current.group = configTemplate.group;
+                current.rights = physical.isFile() ? configTemplate.mode : configTemplate.dirmode;
+                current.specific = configTemplate.specific;
+                current.isManuallyConfigured = manually;
+                current.isDummy = dummy;
+            }
+        }
+        return current;
+    }
+
+    public void processConfigEntry(XFilePhysical file, File physical) {
         Path pkgFilePathObj = Paths.get(file.pkgPath);
         String filename = pkgFilePathObj.getFileName().toString();
         // add all parents
         FileTreeNode lastParentDirectory = addParentsForPath(
                 pkgFilePathObj,
-                file.dirmode,
-                file.specific,
-                file.owner,
-                file.group,
+                file,
                 !file.addParents);
 
         if (lastParentDirectory == null) {
@@ -193,56 +233,36 @@ public class BuilderWrapper {
             return;
         }
         // add file/directory
-        FileTreeNode current = lastParentDirectory.getChild(filename);
-        if (current == null) {
-            logger.info(String.format("Add %s, physical - %s", lastParentDirectory.getPath().resolve(filename),  physical));
-            current = lastParentDirectory.addChild(new FileTreeNode(
-                    filename,
-                    physical,
-                    physical.isFile() ? file.mode : file.dirmode,
-                    null,
-                    file.specific,
-                    file.owner,
-                    file.group,
-                    true,
-                    false));
-        } else {
-            if (!current.isManuallyConfigured){
-                logger.info(String.format("Edit %s, physical - %s", current, physical));
-                current.owner = file.owner;
-                current.group = file.group;
-                current.rights = physical.isFile() ? file.mode : file.dirmode;
-                current.specific = file.specific;
-                current.isManuallyConfigured = true;
-            }
-        }
+        FileTreeNode current = addFile(lastParentDirectory, filename, physical, file, true, true, false);
 
         // add children, if children haven't already added
         if (physical.isDirectory() && file.recursive && !current.isAddChildrenUsed) {
             current.isAddChildrenUsed = true;
-            addChildrenForPath(current, file.mode, file.dirmode, file.specific, file.owner, file.group);
+            addChildrenForPath(current, file);
         }
 
     }
 
-    private void setXFileDefaults(XFile obj){
+    /**
+     * Set default parameters for XFilePhysical entry
+     */
+    private void setXFileDefaults(XFilePhysical obj){
         if (obj.mode == null) obj.mode = DEFAULT_MODE;
         if (obj.dirmode == null) obj.dirmode = DEFAULT_DIRMODE;
         if (obj.specific == null) obj.specific = new XFilePlatformSpecific();
-        if (obj.specific.rpmDirective == null) obj.specific.rpmDirective = DEFAULT_RPM_DIRECTIVE;
-        if (obj.specific.debIsConfig == null) obj.specific.debIsConfig = false;
         if (obj.owner == null) obj.owner = DEFAULT_OWNER;
         if (obj.group == null) obj.group = DEFAULT_GROUP;
         if (obj.recursive == null) obj.recursive = true;
-        if (obj.addParents == null) obj.addParents = false;
+        //if (obj.addParents == null) obj.addParents = false;
     }
 
+    /**
+     * Add recursive all physical children for startFrom node
+     * @param startFrom node to start from
+     * @param configTemplate XFilePhysical root record. Added children will inherit config from this record
+     */
     private void addChildrenForPath(FileTreeNode startFrom,
-                                    int mode,
-                                    int dirmode,
-                                    XFilePlatformSpecific specific,
-                                    String owner,
-                                    String group) {
+                                    XFilePhysical configTemplate) {
         Path path = startFrom.getPath();
         File physical = pkgPathToFile(path.toString(), root.physical);
         if (physical.isFile()) return;
@@ -253,30 +273,10 @@ public class BuilderWrapper {
             List<Path> pathList = paths.collect(Collectors.toList());
             for (Path e : pathList) {
                 File file = e.toFile();
-                String name = file.getName();
+                String filename = file.getName();
                 BasicFileAttributes basicFileAttributes = Files.readAttributes(file.toPath(), BasicFileAttributes.class);
 
-                FileTreeNode newNode = startFrom.getChild(name);
-                //add a file/directory
-                if (newNode == null) {
-                    logger.info(String.format("Add %s, physical - %s", startFrom.getPath().resolve(name), file.getPath()));
-                    newNode = startFrom.addChild(new FileTreeNode(
-                            name,
-                            file,
-                            basicFileAttributes.isRegularFile() ? mode : dirmode,
-                            null,
-                            specific,
-                            owner,
-                            group,
-                            false,
-                            false));
-                } else if (!newNode.isManuallyConfigured) {
-                    logger.info(String.format("Edit %s, physical - %s", newNode, file));
-                    newNode.owner = owner;
-                    newNode.group = group;
-                    newNode.rights = physical.isFile() ? mode : dirmode;
-                    newNode.specific = specific;
-                }
+                FileTreeNode newNode = addFile(startFrom, filename, file, configTemplate, false, true, false);
 
                 // schedule adding children of this directory, if they haven't added already
                 if (basicFileAttributes.isDirectory() && !newNode.isAddChildrenUsed)
@@ -288,12 +288,16 @@ public class BuilderWrapper {
         }
 
         // add all subdirectories
+        //TODO non recursive search
         for (FileTreeNode directory : directories) {
-            directory.isAddChildrenUsed = true;
-            addChildrenForPath(directory, mode, dirmode, specific, owner, group);
+            addChildrenForPath(directory, configTemplate);
         }
     }
 
+
+    /**
+     * Load files to builder instance
+     */
     private void applyFileTreeToBackend(){
         logger.info("----   Apply file tree to backend   ----");
         Queue<FileTreeNode> queue = new LinkedList<>();
@@ -314,6 +318,7 @@ public class BuilderWrapper {
             queue.addAll(node.children);
         }
     }
+
     public void build(File outputDirectory) {
         applyFileTreeToBackend();
         logger.info(String.format("----  Save result to %s  ----", outputDirectory));
@@ -408,11 +413,11 @@ public class BuilderWrapper {
         @Override
         public String toString() {
            StringBuilder builder1 = new StringBuilder() ;
-           builder1.append("'").append(getPath().toString()).append("'(");
+           builder1.append("'").append(getPath().toString()).append("' [");
            if (isManuallyConfigured) builder1.append("Manually,");
            if (isDummy) builder1.append("Dummy,");
            if (isAddChildrenUsed) builder1.append("Children added");
-           return builder1.append(")").toString();
+           return builder1.append("]").toString();
         }
     }
 }

@@ -20,16 +20,13 @@ public class Config {
 
     private final XConfig xConfig;
     private final BuildType type;
-    private final File input;
     private final File output;
 
     public Config(File configFile,
                   BuildType type,
-                  File input,
                   File output) throws JAXBException {
         xConfig = (XConfig) configUnmarshaller.unmarshal(configFile);
         this.type = type;
-        this.input = input;
         this.output = output;
     }
 
@@ -44,9 +41,5 @@ public class Config {
 
     public File getOutput() {
         return output;
-    }
-
-    public File getInput() {
-        return input;
     }
 }

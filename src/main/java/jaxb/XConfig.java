@@ -14,14 +14,8 @@ public class XConfig {
     @XmlElementWrapper(name = "buildInDirs")
     public List<String> buildInDir;
 
-    @XmlElementWrapper(name = "files")
-    public List<XFile> file;
+    public XFiles files;
 
     public XScripts scripts;
-
-    public XConfig(){
-        buildInDir = new ArrayList<>();
-        file = new ArrayList<>();
-    }
 
 }

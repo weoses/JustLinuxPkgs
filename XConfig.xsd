@@ -14,13 +14,7 @@
           </xs:sequence>
         </xs:complexType>
       </xs:element>
-      <xs:element name="files" minOccurs="0">
-        <xs:complexType>
-          <xs:sequence>
-            <xs:element name="file" type="xFile" nillable="true" minOccurs="0" maxOccurs="unbounded"/>
-          </xs:sequence>
-        </xs:complexType>
-      </xs:element>
+      <xs:element name="files" type="xFiles" minOccurs="0"/>
       <xs:element name="scripts" type="xScripts" minOccurs="0"/>
     </xs:sequence>
   </xs:complexType>
@@ -52,12 +46,21 @@
     <xs:sequence>
       <xs:element name="defaultDirmode" type="xs:string" minOccurs="0"/>
       <xs:element name="defaultMode" type="xs:string" minOccurs="0"/>
+      <xs:element name="defaultOwner" type="xs:string" minOccurs="0"/>
+      <xs:element name="defaultGroup" type="xs:string" minOccurs="0"/>
     </xs:sequence>
   </xs:complexType>
 
-  <xs:complexType name="xFile">
+  <xs:complexType name="xFiles">
     <xs:sequence>
-      <xs:element name="pkgPath" type="xs:string"/>
+      <xs:element name="physicalRoot" type="xs:string" minOccurs="0"/>
+      <xs:element name="file" type="xFilePhysical" nillable="true" minOccurs="0" maxOccurs="unbounded"/>
+      <xs:element name="fileNsis" type="xFileNsis" nillable="true" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="xFilePhysical">
+    <xs:sequence>
       <xs:element name="mode" type="xs:string" minOccurs="0"/>
       <xs:element name="dirmode" type="xs:string" minOccurs="0"/>
       <xs:element name="owner" type="xs:string" minOccurs="0"/>
@@ -66,13 +69,37 @@
       <xs:element name="addParents" type="xs:boolean" minOccurs="0"/>
       <xs:element name="specific" type="xFilePlatformSpecific" minOccurs="0"/>
     </xs:sequence>
+    <xs:attribute name="pkgPath" type="xs:string" use="required"/>
+    <xs:attribute name="physicalPath" type="xs:string"/>
   </xs:complexType>
 
   <xs:complexType name="xFilePlatformSpecific">
     <xs:sequence>
       <xs:element name="rpmDirective" type="xs:string" minOccurs="0"/>
-      <xs:element name="debIsConfig" type="xs:boolean" minOccurs="0"/>
+      <xs:element name="debIsConfig" type="xs:boolean"/>
     </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="xFileNsis">
+    <xs:sequence>
+      <xs:element name="exclude" type="xExclude" nillable="true" minOccurs="0" maxOccurs="unbounded"/>
+      <xs:element name="replace" type="xReplace" nillable="true" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+    <xs:attribute name="nsisFilePath" type="xs:string" use="required"/>
+    <xs:attribute name="nsisWorkingDirectory" type="xs:string" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="xExclude">
+    <xs:sequence/>
+    <xs:attribute name="regexp" type="xs:boolean" use="required"/>
+    <xs:attribute name="text" type="xs:string"/>
+  </xs:complexType>
+
+  <xs:complexType name="xReplace">
+    <xs:sequence/>
+    <xs:attribute name="regexp" type="xs:boolean" use="required"/>
+    <xs:attribute name="first" type="xs:string"/>
+    <xs:attribute name="second" type="xs:string"/>
   </xs:complexType>
 
   <xs:complexType name="xScripts">
