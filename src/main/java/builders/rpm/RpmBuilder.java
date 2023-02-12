@@ -3,7 +3,6 @@ package builders.rpm;
 import builders.PkgBuilder;
 import jaxb.XFilePlatformSpecific;
 import jaxb.XPkgParams;
-import org.apache.commons.io.FilenameUtils;
 import org.redline_rpm.Builder;
 import org.redline_rpm.header.Os;
 import org.slf4j.Logger;
@@ -15,7 +14,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 
 public class RpmBuilder extends PkgBuilder {
@@ -37,6 +35,7 @@ public class RpmBuilder extends PkgBuilder {
         builder.setFileDigestAlg(params.rpmFileDigestsAlg);
         builder.setPlatform(params.rpmPackageArch, Os.LINUX);
         builder.setBuildHost("localhost");
+        builder.setSummary("summary");
     }
 
     @Override
@@ -44,8 +43,7 @@ public class RpmBuilder extends PkgBuilder {
         Path current = Paths.get("/");
         for (Path path : Paths.get(pkgPath)) {
             current = current.resolve(path);
-            String unixPath = FilenameUtils.separatorsToUnix(current.toString());
-            buildInDirs.add(Util.Util.normalizeDirectoryPath(unixPath));
+            buildInDirs.add(Util.Util.normalizePkgPath(current.toString()));
         }
 
         builder.addBuiltinDirectory(pkgPath);
@@ -59,12 +57,12 @@ public class RpmBuilder extends PkgBuilder {
                                 String owner,
                                 String group) {
         try {
-            String pkgPathNorm =  Util.Util.normalizeDirectoryPath(pkgPath);
-            if (buildInDirs.contains(pkgPathNorm)) {
+            if (buildInDirs.contains(pkgPath)) {
                 logger.info("Skipping directory {}, it s build in", pkgPath);
                 return false;
             }
-            builder.addDirectory(pkgPathNorm, dirmode, specific.rpmDirective, owner, group, false);
+
+            builder.addDirectory(rpmNormalizePath(pkgPath), dirmode, specific.rpmDirective, owner, group, false);
             return true;
         } catch (Exception e) {
             logger.warn(e.getMessage(), e);
@@ -76,7 +74,8 @@ public class RpmBuilder extends PkgBuilder {
     @Override
     public boolean addFile(String pkgPath, File file, int filemode, XFilePlatformSpecific specific, String owner, String group) {
         try {
-            builder.addFile(pkgPath, file, filemode, -1, specific.rpmDirective, owner, group, false);
+
+            builder.addFile(rpmNormalizePath(pkgPath), file, filemode, -1, specific.rpmDirective, owner, group, false);
             return true;
         } catch (Exception e) {
             logger.warn(e.getMessage(), e);
@@ -112,5 +111,15 @@ public class RpmBuilder extends PkgBuilder {
             logger.warn(e.getMessage(), e);
         }
         return null;
+    }
+
+    private String rpmNormalizePath(String path){
+        if (!path.startsWith("/")){
+            path = "/"+path;
+        }
+        if (path.endsWith("/")){
+            path = path.substring(0, path.length()-1);
+        }
+        return path;
     }
 }

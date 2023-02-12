@@ -32,6 +32,7 @@ public class NSISFilesReader {
         try (BufferedReader reader = new BufferedReader(new FileReader(nsisFile))) {
             String line;
             while ((line = reader.readLine()) != null) {
+                if (line.trim().startsWith(";")) continue;
                 parseLine(line, state);
             }
         } catch (IOException e) {

@@ -120,7 +120,7 @@ public class BuilderWrapper {
             if (StringUtils.isNotEmpty(fileDefinition.physicalPath )){
                 physical = new File(fileDefinition.physicalPath);
             } else {
-                physical = pkgPathToFile(fileDefinition.pkgPath, input);
+                physical = physicalPathByRelatives(fileDefinition.pkgPath);
             }
 
             if (!physical.exists()){
@@ -133,7 +133,24 @@ public class BuilderWrapper {
         }
     }
 
-    private File pkgPathToFile(String pkgPath, File root){
+    private File physicalPathByRelatives(String pkgPath){
+        FileTreeNode node = root;
+        Path nearestPhysical = node.physical.toPath();
+        for (Path path : Paths.get(pkgPath)) {
+            if (node != null) {
+                node = node.getChild(path.getFileName().toString());
+            }
+            if (node != null) {
+                nearestPhysical = node.physical.toPath();
+            } else {
+                nearestPhysical = nearestPhysical.resolve(path);
+
+            }
+        }
+        return nearestPhysical.toFile();
+    }
+
+    private File physicalPathByRoot(String pkgPath, File root){
         return Paths.get(root.getPath(), FilenameUtils.separatorsToSystem(pkgPath)).toFile();
     }
 
@@ -252,8 +269,6 @@ public class BuilderWrapper {
         if (obj.specific == null) obj.specific = new XFilePlatformSpecific();
         if (obj.owner == null) obj.owner = DEFAULT_OWNER;
         if (obj.group == null) obj.group = DEFAULT_GROUP;
-        if (obj.recursive == null) obj.recursive = true;
-        //if (obj.addParents == null) obj.addParents = false;
     }
 
     /**
@@ -264,7 +279,7 @@ public class BuilderWrapper {
     private void addChildrenForPath(FileTreeNode startFrom,
                                     XFilePhysical configTemplate) {
         Path path = startFrom.getPath();
-        File physical = pkgPathToFile(path.toString(), root.physical);
+        File physical = startFrom.physical;
         if (physical.isFile()) return;
         Set<FileTreeNode> directories = new HashSet<>();
 
@@ -306,7 +321,7 @@ public class BuilderWrapper {
             FileTreeNode node = queue.poll();
             if (!node.isDummy) {
                 boolean result;
-                String path = Util.normalizePkgPathNoSlash(node.getPath().toString());
+                String path = Util.normalizePkgPath(node.getPath().toString());
                 if (node.physical.isDirectory()) {
                     result = builder.addDirectory(path, node.physical, node.rights, node.specific, node.owner, node.group);
                     logger.info(String.format("Add directory %s, physical - %s, to package, result = %s", path, node.physical, result));

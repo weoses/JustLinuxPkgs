@@ -9,15 +9,21 @@ public class Util {
 //        return result;
 //    }
 
-    public static String normalizePkgPathNoSlash(String path){
+    /**
+     *  /opt/data/ -> ./opt/data
+     */
+    public static String normalizePkgPath(String path){
         String result = FilenameUtils.separatorsToUnix(path);
+
         while (result.startsWith("/"))
             result = result.substring(1);
+
+        if (result.endsWith("/")){
+            result = result.substring(result.length()-1);
+        }
+
         return result;
     }
-    public static String normalizeDirectoryPath(String path){
-        String s = normalizePkgPathNoSlash(path);
-        if (!s.endsWith("/")) s += "/";
-        return s;
-    }
+
+
 }

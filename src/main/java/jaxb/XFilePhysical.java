@@ -19,8 +19,8 @@ public class XFilePhysical {
     public Integer dirmode;
     public String owner;
     public String group;
-    public Boolean recursive;
-    public Boolean addParents = false;//Not working
+    public boolean recursive = false;
+    public boolean addParents = false;//Not working
 
     public XFilePlatformSpecific specific;
 

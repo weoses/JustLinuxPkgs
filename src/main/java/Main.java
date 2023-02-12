@@ -11,6 +11,7 @@ import org.w3c.dom.Document;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import java.io.File;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -44,7 +45,9 @@ public class Main {
 
         parser.addArgument("--keywords", "-k")
                 .nargs("*")
-                .dest("keywords");
+                .dest("keywords")
+                .help("Keyword arguments for config")
+                .setDefault(new ArrayList<>());
 
         try {
             Namespace res = parser.parseArgs(args);

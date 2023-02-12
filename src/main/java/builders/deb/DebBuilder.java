@@ -81,13 +81,13 @@ public class DebBuilder extends PkgBuilder {
     public void addBuildin(String pkgPath) {
         Path p  = Paths.get(pkgPath);
         do {
-            buildInDirs.add(Util.normalizeDirectoryPath(p.toString()));
+            buildInDirs.add(Util.normalizePkgPath(p.toString()));
         } while ( (p = p.getParent()) != null);
     }
 
     @Override
     public boolean addDirectory(String pkgPath, File file, int dirmode, XFilePlatformSpecific specific, String owner, String group) {
-        files.add(new FileObject(Util.normalizeDirectoryPath(pkgPath), dirmode, file, owner, group, true));
+        files.add(new FileObject(Util.normalizePkgPath(pkgPath), dirmode, file, owner, group, true));
         return true;
     }
 
@@ -106,7 +106,7 @@ public class DebBuilder extends PkgBuilder {
 
     @Override
     public boolean addFile(String pkgPath, File file, int filemode, XFilePlatformSpecific specific, String owner, String group) {
-        String nonSlashPath =  Util.normalizePkgPathNoSlash(pkgPath);
+        String nonSlashPath =  Util.normalizePkgPath(pkgPath);
         try (InputStream is = Files.newInputStream(file.toPath())) {
             String md5 = org.apache.commons.codec.digest.DigestUtils.md5Hex(is);
             logger.debug(String.format("File %s, md5 %s", pkgPath, file));
@@ -246,6 +246,8 @@ public class DebBuilder extends PkgBuilder {
                  GzipCompressorOutputStream gzOut = new GzipCompressorOutputStream(fOut);
                  TarArchiveOutputStream tOut = new TarArchiveOutputStream(gzOut)) {
 
+                tOut.setLongFileMode(TarArchiveOutputStream.LONGFILE_POSIX);
+
                 TarArchiveEntry dotEntry = new TarArchiveEntry("./");
                 dotEntry.setSize(0);
                 tOut.putArchiveEntry(dotEntry);
@@ -259,7 +261,13 @@ public class DebBuilder extends PkgBuilder {
                         .collect(Collectors.toList());
 
                 for(FileObject  f : sortedList) {
-                    TarArchiveEntry entry = new TarArchiveEntry(f.physical, Util.normalizePkgPathNoSlash(Paths.get("./", f.pkgPath).toString()));
+                    String pkgPath = f.pkgPath;
+
+                    if (!pkgPath.startsWith("./")){
+                        pkgPath = "./"+pkgPath;
+                    }
+
+                    TarArchiveEntry entry = new TarArchiveEntry(f.physical, pkgPath);
                     entry.setUserName(f.owner);
                     entry.setGroupName(f.group);
                     entry.setMode(f.rights);

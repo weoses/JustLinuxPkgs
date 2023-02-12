@@ -44,6 +44,6 @@ public class DomReplacer {
             matcher.appendReplacement(buffer, params.getOrDefault(matches, ""));
         }
         matcher.appendTail(buffer);
-        node.setNodeValue(buffer.toString());
+        node.setTextContent(buffer.toString());
     }
 }
