@@ -1,5 +1,6 @@
 import builders.BuildType;
 import jaxb.XConfig;
+import org.w3c.dom.Document;
 
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
@@ -22,7 +23,7 @@ public class Config {
     private final BuildType type;
     private final File output;
 
-    public Config(File configFile,
+    public Config(Document configFile,
                   BuildType type,
                   File output) throws JAXBException {
         xConfig = (XConfig) configUnmarshaller.unmarshal(configFile);
